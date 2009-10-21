@@ -30,7 +30,7 @@
 
 using namespace lux;
 
-#define SAMPLE_FLOATS 7
+#define SAMPLE_FLOATS 6
 
 // mutate a value in the range [0-1]
 static float mutate(const float x, const float randomValue)
@@ -51,8 +51,8 @@ static float mutate(const float x, const float randomValue)
 static float mutateScaled(const float x, const float randomValue, const float mini, const float maxi, const float range)
 {
 	static const float s1 = 32.f;
-	const float dx = range / (1.f + s1 * fabsf(2.f * randomValue - 1.f)) -
-		range / (1.f + s1);
+	const float dx = range / (s1 / (1.f + s1) + (s1 * s1) / (1.f + s1) *
+		fabsf(2.f * randomValue - 1.f)) - range / s1;
 	if (randomValue < 0.5f) {
 		float x1 = x + dx;
 		return (x1 < maxi) ? x1 : x1 - maxi + mini;
@@ -154,6 +154,9 @@ bool MetropolisSampler::GetNextSample(Sample *sample, u_int *use_pos)
 	const float mutationSelector = tspack->rng->floatValue();
 	large = (mutationSelector < pLarge);
 	if (sampleImage == NULL) {
+		// If this is the original sampler, shuffle the QR sequence
+		if (!timeImage)
+			Shuffle(tspack, rngSamples, rngN, 1);
 		initMetropolis(this, sample);
 		large = true;
 	}
@@ -183,7 +186,6 @@ bool MetropolisSampler::GetNextSample(Sample *sample, u_int *use_pos)
 		sample->lensV = rngGet(3);
 		sample->time = rngGet(4);
 		sample->wavelengths = rngGet(5);
-		sample->singleWavelength = rngGet(6);
 		for (int i = SAMPLE_FLOATS; i < normalSamples; ++i)
 			sample->oneD[0][i - SAMPLE_FLOATS] = rngGet(i);
 		// Reset number of mutations for lazy samples
@@ -215,12 +217,11 @@ bool MetropolisSampler::GetNextSample(Sample *sample, u_int *use_pos)
 				rngGet(0), xPixelStart, xPixelEnd, range);
 			sample->imageY = mutateScaled(sampleImage[1],
 				rngGet(1), yPixelStart, yPixelEnd, range);
-			sample->lensU = mutate(sampleImage[2], rngGet(2));
-			sample->lensV = mutate(sampleImage[3], rngGet(3));
-			sample->time = mutate(sampleImage[4], rngGet(4));
-			sample->wavelengths = mutate(sampleImage[5], rngGet(5));
-			sample->singleWavelength = mutateScaled(sampleImage[6],
-				rngGet(6), 0.f, 1.f, 1.f);
+			sample->lensU = mutateScaled(sampleImage[2], rngGet(2), 0.f, 1.f, .5f);
+			sample->lensV = mutateScaled(sampleImage[3], rngGet(3), 0.f, 1.f, .5f);
+			sample->time = mutateScaled(sampleImage[4], rngGet(4), 0.f, 1.f, .5f);
+			sample->wavelengths = mutateScaled(sampleImage[5],
+				rngGet(5), 0.f, 1.f, .5f);
 			for (int i = SAMPLE_FLOATS; i < normalSamples; ++i)
 				sample->oneD[0][i - SAMPLE_FLOATS] =
 					mutate(sampleImage[i], rngGet(i));
@@ -320,7 +321,6 @@ void MetropolisSampler::AddSample(const Sample &sample)
 		sampleImage[3] = sample.lensV;
 		sampleImage[4] = sample.time;
 		sampleImage[5] = sample.wavelengths;
-		sampleImage[6] = sample.singleWavelength;
 		for (int i = SAMPLE_FLOATS; i < totalSamples; ++i)
 			sampleImage[i] = sample.oneD[0][i - SAMPLE_FLOATS];
 		for (int i = 0 ; i < totalTimes; ++i)
@@ -357,7 +357,7 @@ Sampler* MetropolisSampler::CreateSampler(const ParamSet &params, const Film *fi
 	int maxConsecRejects = params.FindOneInt("maxconsecrejects", 512);	// number of consecutive rejects before a next mutation is forced
 	float largeMutationProb = params.FindOneFloat("largemutationprob", 0.4f);	// probability of generating a large sample mutation
 	float microMutationProb = params.FindOneFloat("micromutationprob", 0.f);	// probability of generating a micro sample mutation
-	float range = params.FindOneFloat("mutationrange", (xEnd - xStart + yEnd - yStart) / 32.);	// maximum distance in pixel for a small mutation
+	float range = params.FindOneFloat("mutationrange", (xEnd - xStart + yEnd - yStart) / 32.f);	// maximum distance in pixel for a small mutation
 	bool useVariance = params.FindOneBool("usevariance", false);
 
 	return new MetropolisSampler(xStart, xEnd, yStart, yEnd, maxConsecRejects,
