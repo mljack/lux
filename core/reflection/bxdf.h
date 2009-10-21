@@ -26,29 +26,10 @@
 #include "lux.h"
 #include "geometry/raydifferential.h"
 #include "spectrum.h"
-#include "memory.h"
 
 namespace lux
 {
 
-// BSDF Inline Functions
-inline float CosTheta(const Vector &w) { return w.z; }
-inline float SinTheta(const Vector &w) {
-	return sqrtf(max(0.f, 1.f - w.z*w.z));
-}
-inline float SinTheta2(const Vector &w) {
-	return 1.f - CosTheta(w)*CosTheta(w);
-}
-inline float CosPhi(const Vector &w) {
-	return w.x / SinTheta(w);
-}
-inline float SinPhi(const Vector &w) {
-	return w.y / SinTheta(w);
-}
-inline bool SameHemisphere(const Vector &w,
-                          const Vector &wp) {
-	return w.z * wp.z > 0.f;
-}
 // BSDF Declarations
 enum BxDFType {
 	BSDF_REFLECTION   = 1<<0,
@@ -104,11 +85,6 @@ public:
 	virtual SWCSpectrum rho(const TsPack *tspack, const Vector &wo,
 		BxDFType flags = BSDF_ALL) const = 0;
 
-	static void *Alloc(const TsPack *tspack, u_int sz) {
-		return tspack->arena->Alloc(sz);
-	}
-	static void FreeAll(const TsPack *tspack) { tspack->arena->FreeAll(); }
-
 	// BSDF Public Data
 	const DifferentialGeometry dgShading;
 	const float eta;
@@ -123,7 +99,6 @@ protected:
 	Normal nn, ng;
 	Vector sn, tn;
 };
-#define BSDF_ALLOC(TSPACK,T)  new (BSDF::Alloc((TSPACK), sizeof(T))) T
 
 // Single BxDF BSDF declaration
 class  SingleBSDF : public BSDF  {

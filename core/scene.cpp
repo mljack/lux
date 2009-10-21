@@ -323,8 +323,7 @@ void RenderThread::render(RenderThread *myThread) {
 		myThread->tspack->camera->SampleMotion(myThread->tspack->time);
 
 		// Sample new SWC thread wavelengths
-		myThread->tspack->swl->Sample(myThread->sample->wavelengths,
-			myThread->sample->singleWavelength);
+		myThread->tspack->swl->Sample(myThread->sample->wavelengths);
 
         while(myThread->signal == PAUSE) {
             boost::xtime xt;
@@ -348,7 +347,7 @@ void RenderThread::render(RenderThread *myThread) {
             myThread->sampler->AddSample(*(myThread->sample));
 
             // Free BSDF memory from computing image sample value
-            BSDF::FreeAll(myThread->tspack);
+            myThread->tspack->arena->FreeAll();
 
         // update samples statistics
 	do {

@@ -247,8 +247,8 @@ bool PerspectiveCamera::Sample_W(const TsPack *tspack, const Scene *scene, float
 	}
 	Point ps = CameraToWorld(psC);
 	DifferentialGeometry dg(ps, normal, CameraToWorld(Vector(1, 0, 0)), CameraToWorld(Vector(0, 1, 0)), Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, normal,
-		BSDF_ALLOC(tspack, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, normal,
+		ARENA_ALLOC(tspack->arena, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
 		fov, Apixel, psC, RasterToCameraBidir,
 		xStart, xEnd, yStart, yEnd));
 	*pdf = posPdf;
@@ -265,8 +265,8 @@ bool PerspectiveCamera::Sample_W(const TsPack *tspack, const Scene *scene, const
 	}
 	Point ps = CameraToWorld(psC);
 	DifferentialGeometry dg(ps, normal, CameraToWorld(Vector(1, 0, 0)), CameraToWorld(Vector(0, 1, 0)), Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, normal,
-		BSDF_ALLOC(tspack, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, normal,
+		ARENA_ALLOC(tspack->arena, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
 		fov, Apixel, psC, RasterToCameraBidir,
 		xStart, xEnd, yStart, yEnd));
 	*pdf = posPdf;
@@ -289,7 +289,7 @@ bool PerspectiveCamera::GetSamplePosition(const Point &p, const Vector &wi, floa
 {
 	Vector direction(normal);
 	const float cosi = Dot(wi, direction);
-	if (cosi <= 0.f || (distance != -1.f && (distance / cosi < ClipHither || distance / cosi > ClipYon)))
+	if (cosi <= 0.f || (!isinf(distance) && (distance / cosi < ClipHither || distance / cosi > ClipYon)))
 		return false;
 	if (LensRadius > 0.f) {
 		Point pFC(p + wi * (FocalDistance / Dot(wi, direction)));
