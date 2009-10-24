@@ -52,7 +52,7 @@ AreaLight::AreaLight(const Transform &light2world,
 		boost::shared_ptr<Texture<SWCSpectrum> > le,
 		float g, float pow, float e, 
 		SampleableSphericalFunction *ssf,
-		int ns, const boost::shared_ptr<Primitive> &p)
+		u_int ns, const boost::shared_ptr<Primitive> &p)
 	: Light(light2world, ns) {
 	Le = le;
 	gain = g;
@@ -134,11 +134,11 @@ bool AreaLight::Sample_L(const TsPack *tspack, const Scene *scene, float u1, flo
 	dg.time = tspack->time;
 	prim->Sample(u1, u2, u3, &dg);
 	if(func)
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, dg.nn,
-			BSDF_ALLOC(tspack, GonioAreaBxDF)(func));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, dg.nn,
+			ARENA_ALLOC(tspack->arena, GonioAreaBxDF)(func));
 	else
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, dg.nn,
-			BSDF_ALLOC(tspack, Lambertian)(SWCSpectrum(1.f)));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, dg.nn,
+			ARENA_ALLOC(tspack->arena, Lambertian)(SWCSpectrum(1.f)));
 	*pdf = prim->Pdf(dg.p);
 	if (*pdf > 0.f) {
 		*Le = this->Le->Evaluate(tspack, dg) * gain * M_PI;
@@ -159,11 +159,11 @@ bool AreaLight::Sample_L(const TsPack *tspack, const Scene *scene, const Point &
 	*pdfDirect = prim->Pdf(p, dg.p);
 	if (*pdfDirect > 0.f) {
 		if(func)
-			*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, dg.nn,
-				BSDF_ALLOC(tspack, GonioAreaBxDF)(func));
+			*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, dg.nn,
+				ARENA_ALLOC(tspack->arena, GonioAreaBxDF)(func));
 		else
-			*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, dg.nn,
-				BSDF_ALLOC(tspack, Lambertian)(SWCSpectrum(1.f)));
+			*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, dg.nn,
+				ARENA_ALLOC(tspack->arena, Lambertian)(SWCSpectrum(1.f)));
 		visibility->SetSegment(p, dg.p, tspack->time);
 		*Le = this->Le->Evaluate(tspack, dg) * gain * M_PI;
 		return true;
@@ -174,11 +174,11 @@ bool AreaLight::Sample_L(const TsPack *tspack, const Scene *scene, const Point &
 SWCSpectrum AreaLight::L(const TsPack *tspack, const Ray &ray, const DifferentialGeometry &dg, const Normal &n, BSDF **bsdf, float *pdf, float *pdfDirect) const
 {
 	if(func)
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, dg.nn,
-			BSDF_ALLOC(tspack, GonioAreaBxDF)(func));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, dg.nn,
+			ARENA_ALLOC(tspack->arena, GonioAreaBxDF)(func));
 	else
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, dg.nn,
-			BSDF_ALLOC(tspack, Lambertian)(SWCSpectrum(1.f)));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, dg.nn,
+			ARENA_ALLOC(tspack->arena, Lambertian)(SWCSpectrum(1.f)));
 	*pdf = prim->Pdf(dg.p);
 	*pdfDirect = prim->Pdf(ray.o, dg.p);
 	return L(tspack, dg, -ray.d);
