@@ -20,6 +20,9 @@
  *   Lux Renderer website : http://www.luxrender.net                       *
  ***************************************************************************/
 
+// This include must come before lux.h
+#include <boost/serialization/vector.hpp>
+
 #include "lux.h"
 #include "scene.h"
 #include "api.h"
@@ -30,6 +33,7 @@
 
 #include <fstream>
 #include <boost/asio.hpp>
+#include <boost/archive/text_oarchive.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/bind.hpp>
 
@@ -396,7 +400,7 @@ void RenderFarm::send(const std::string &command, const std::string &name, float
 	}
 }
 
-int RenderFarm::getServersStatus(RenderingServerInfo *info, int maxInfoCount) {
+u_int RenderFarm::getServersStatus(RenderingServerInfo *info, u_int maxInfoCount) {
 	ptime now = second_clock::local_time();
 	for (size_t i = 0; i < min<size_t>(serverInfoList.size(), maxInfoCount); ++i) {
 		info[i].serverIndex = i;
