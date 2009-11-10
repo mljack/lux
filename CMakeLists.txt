@@ -652,6 +652,34 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/core
 	${CMAKE_BINARY_DIR}
 	)
 
+SET( LUXQTGUI_SRCS
+    qtgui/main.cpp
+    qtgui/histogramview.cpp
+    qtgui/mainwindow.cpp
+    qtgui/renderview.cpp
+    qtgui/luxapp.cpp
+    qtgui/aboutdialog.cpp
+    qtgui/lightgroupwidget.cpp
+    )
+SET( LUXQTGUI_MOC
+    qtgui/histogramview.h
+    qtgui/mainwindow.h
+    qtgui/aboutdialog.h
+    qtgui/luxapp.h
+    qtgui/renderview.h
+    qtgui/lightgroupwidget.h
+    )
+SET(LUXQTGUI_UIS
+    qtgui/luxrender.ui
+    qtgui/aboutdialog.ui
+    qtgui/lightgroup.ui
+    )
+SET( LUXQTGUI_RCS
+    qtgui/icons.qrc
+    qtgui/splash.qrc
+    qtgui/images.qrc
+    )
+
 #############################################################################
 #############################################################################
 #####################            LINKER INFO           ######################
@@ -716,6 +744,31 @@ IF(APPLE)
 ENDIF(APPLE)
 
 #############################################################################
+#Here we build the luxcomp executable
+#############################################################################
+ADD_EXECUTABLE(luxcomp tools/luxcomp.cpp)
+IF(APPLE)
+	TARGET_LINK_LIBRARIES(luxcomp -Wl,-undefined -Wl,dynamic_lookup -all_load lux -noall_load ${CMAKE_THREAD_LIBS_INIT} ${OPENEXR_LIBRARIES} z ${Boost_LIBRARIES} ${PNG_LIBRARIES} ${TIFF_LIBRARIES} ${JPEG_LIBRARIES})
+ELSE(APPLE)
+	TARGET_LINK_LIBRARIES(luxcomp -Wl,--whole-archive lux -Wl,--no-whole-archive ${CMAKE_THREAD_LIBS_INIT} ${OPENEXR_LIBRARIES} ${Boost_LIBRARIES} ${PNG_LIBRARIES} ${TIFF_LIBRARIES} ${JPEG_LIBRARIES} ${SYS_LIBRARIES})
+ENDIF(APPLE)
+
+IF(APPLE)
+	SET(GUI_TYPE MACOSX_BUNDLE)
+	# SET(MACOSX_BUNDLE_LONG_VERSION_STRING "${OPENSCENEGRAPH_MAJOR_VERSION}.${OPENSCENEGRAPH_MINOR_VERSION}.${OPENSCENEGRAPH_PATCH_VERSION}")
+	# Short Version is the "marketing version". It is the version
+	# the user sees in an information panel.
+	SET(MACOSX_BUNDLE_SHORT_VERSION_STRING "${VERSION}")
+	# Bundle version is the version the OS looks at.
+	SET(MACOSX_BUNDLE_BUNDLE_VERSION "${VERSION}")
+	SET(MACOSX_BUNDLE_GUI_IDENTIFIER "org.luxrender.luxrender" )
+	SET(MACOSX_BUNDLE_BUNDLE_NAME "luxrender" )
+	SET(MACOSX_BUNDLE_ICON_FILE "LuxRender.icns")
+	# SET(MACOSX_BUNDLE_COPYRIGHT "")
+	# SET(MACOSX_BUNDLE_INFO_STRING "Info string, localized?")
+ENDIF(APPLE)
+
+#############################################################################
 #Here we build the wxWidgets GUI executable
 #############################################################################
 IF(wxWidgets_FOUND)
@@ -742,6 +795,18 @@ IF(wxWidgets_FOUND)
 		TARGET_LINK_LIBRARIES(luxrender -Wl,--whole-archive lux -Wl,--no-whole-archive ${wxWidgets_LIBRARIES} ${OPENGL_LIBRARY} ${OPENEXR_LIBRARIES} ${Boost_LIBRARIES} ${PNG_LIBRARIES} ${TIFF_LIBRARIES} ${JPEG_LIBRARIES} ${SYS_LIBRARIES})
 	ENDIF(APPLE)
 ENDIF(wxWidgets_FOUND)
+
+#############################################################################
+#Here we build the QT4 GUI executable
+#############################################################################
+IF(Qt4_FOUND)
+	QT4_ADD_RESOURCES( LUXQTGUI_RC_SRCS ${LUXQTGUI_RCS}) 
+	QT4_WRAP_UI( LUXQTGUI_UI_HDRS ${LUXQTGUI_UIS} )
+	QT4_WRAP_CPP( LUXQTGUI_MOC_SRCS ${LUXQTGUI_MOC} )
+
+	ADD_EXECUTABLE(luxrenderqt ${LUXQTGUI_SRCS} ${LUXQTGUI_MOC_SRCS} ${LUXQTGUI_RC_SRCS} ${LUXQTGUI_UI_HDRS})
+	TARGET_LINK_LIBRARIES(luxrenderqt -Wl,--whole-archive lux -Wl,--no-whole-archive ${QT_LIBRARIES} ${OPENEXR_LIBRARIES} ${Boost_LIBRARIES} ${EXTRA_LIBS} ${ZLIB_LIBRARIES} ${BZ2_LIBRARIES} ${PNG_LIBRARIES} ${TIFF_LIBRARIES} ${JPEG_LIBRARIES} ${SYS_LIBRARIES}  ${OPENGL_LIBRARY})
+ENDIF(Qt4_FOUND)
 
 #############################################################################
 

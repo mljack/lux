@@ -9,3 +9,8 @@
 ^luxlex
 ^luxparse
 ^luxmerger
+^luxcomp
+syntax: glob
+*.directory
+moc_*.cxx
+*~
