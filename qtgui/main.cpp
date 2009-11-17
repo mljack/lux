@@ -20,35 +20,39 @@
  *   Lux Renderer website : http://www.luxrender.net                       *
  ***************************************************************************/
 
-#include "shape.h"
-#include "mc.h"
-#include "quadrilateral.h"
+#include <boost/program_options.hpp>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
-namespace lux
+#include <QtGui/QApplication>
+#include <QTranslator>
+
+#include "lux.h"
+#include "api.h"
+#include "error.h"
+#include "osfunc.h"
+
+#include "luxapp.hxx"
+#include "mainwindow.hxx"
+
+using namespace lux;
+
+int main(int argc, char *argv[])
 {
-
-// Quad Declarations
-class Quad : public Shape {
-public:
-	// Quad Public Methods
-	Quad(const Transform &o2w, bool ro, int nq, int nv, 
-		const int *vi, const Point *P);
-	virtual ~Quad();
-	virtual BBox ObjectBound() const;
-	virtual BBox WorldBound() const;
-	virtual bool Intersect(const Ray &ray, float *tHit,
-	               DifferentialGeometry *dg) const;
-	virtual bool IntersectP(const Ray &ray) const;
-	virtual float Area() const;
-	virtual Point Sample(float u1, float u2, float u3, Normal *Ns) const {
-		return quad->Sample(u1, u2, u3, Ns);
-	}
+	lux::LuxGuiApp application(argc, argv);
 	
-	static Shape* CreateShape(const Transform &o2w, bool reverseOrientation, const ParamSet &params);
-private:
-	// Quad Private Data	
-	QuadMesh *mesh;
-	Quadrilateral *quad;
-};
+	QString locale = QLocale::system().name();
 
-}//namespace lux
+	QTranslator translator;
+	if (translator.load(QString("luxrender_") + locale))
+		application.installTranslator(&translator);
+	
+	application.init();
+	
+	if (application.mainwin != NULL)
+		return application.exec();
+	else
+		return 0;
+}
+

@@ -23,6 +23,7 @@
 // brick.cpp*
 #include "lux.h"
 #include "texture.h"
+#include "color.h"
 #include "paramset.h"
 #include "error.h"
 
@@ -107,10 +108,13 @@ public:
 		// Inside brick
 		return tex1->Evaluate(tspack, dg);
     }
-	virtual void SetPower(float power, float area) {
-		// Update sub-textures
-		tex1->SetPower(power, area);
-		tex2->SetPower(power, area);
+	virtual float Y() const {
+		const float m = powf(Clamp(1.f - mortarsize, 0.f, 1.f), 3);
+		return Lerp(m, tex2->Y(), tex1->Y());
+	}
+	virtual float Filter() const {
+		const float m = powf(Clamp(1.f - mortarsize, 0.f, 1.f), 3);
+		return Lerp(m, tex2->Filter(), tex1->Filter());
 	}
 	virtual void SetIlluminant() {
 		// Update sub-textures
@@ -156,8 +160,8 @@ template <class T> Texture<SWCSpectrum> *BrickTexture3D<T>::CreateSWCSpectrumTex
 	IdentityMapping3D *imap = (IdentityMapping3D*) map;
 	imap->Apply3DTextureMappingOptions(tp);
 
-	boost::shared_ptr<Texture<SWCSpectrum> > tex1 = tp.GetSWCSpectrumTexture("bricktex", 1.f);
-	boost::shared_ptr<Texture<SWCSpectrum> > tex2 = tp.GetSWCSpectrumTexture("mortartex", 0.2f);
+	boost::shared_ptr<Texture<SWCSpectrum> > tex1 = tp.GetSWCSpectrumTexture("bricktex", RGBColor(1.f));
+	boost::shared_ptr<Texture<SWCSpectrum> > tex2 = tp.GetSWCSpectrumTexture("mortartex", RGBColor(0.2f));
 
 	float bw = tp.FindFloat("brickwidth", 0.3f);
 	float bh = tp.FindFloat("brickheight", 0.1f);

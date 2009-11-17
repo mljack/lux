@@ -64,8 +64,8 @@ PointLight::~PointLight() {
 	if(func)
 		delete func;
 }
-SWCSpectrum PointLight::Power(const TsPack *tspack, const Scene *) const {
-	return Lbase->Evaluate(tspack, dummydg) * gain * 4.f * M_PI * (func ? func->Average_f() : 1.f);
+float PointLight::Power(const Scene *) const {
+	return Lbase->Y() * gain * 4.f * M_PI * (func ? func->Average_f() : 1.f);
 }
 SWCSpectrum PointLight::Sample_L(const TsPack *tspack, const Point &P, float u1, float u2,
 		float u3, Vector *wo, float *pdf,
@@ -90,10 +90,10 @@ SWCSpectrum PointLight::Sample_L(const TsPack *tspack, const Scene *scene, float
 		return Lbase->Evaluate(tspack, dummydg) * gain;
 	}
 }
-float PointLight::Pdf(const Point &, const Vector &) const {
+float PointLight::Pdf(const TsPack *, const Point &, const Vector &) const {
 	return 0.;
 }
-float PointLight::Pdf(const Point &p, const Normal &n,
+float PointLight::Pdf(const TsPack *tspack, const Point &p, const Normal &n,
 	const Point &po, const Normal &ns) const
 {
 	return AbsDot(Normalize(p - po), ns) / DistanceSquared(p, po);
@@ -117,11 +117,11 @@ bool PointLight::Sample_L(const TsPack *tspack, const Scene *scene, float u1, fl
 	const Normal ns(w);
 	DifferentialGeometry dg(lightPos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
 	if(func)
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
 	else
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, Lambertian)(1.f));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, Lambertian)(1.f));
 	*Le = Lbase->Evaluate(tspack, dummydg) * gain;
 	return true;
 }
@@ -140,11 +140,11 @@ bool PointLight::Sample_L(const TsPack *tspack, const Scene *scene, const Point 
 	CoordinateSystem(Vector(ns), &dpdu, &dpdv);
 	DifferentialGeometry dg(lightPos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
 	if(func)
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
 	else
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, Lambertian)(1.f));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, Lambertian)(1.f));
 	visibility->SetSegment(p, lightPos, tspack->time);
 	*Le = Lbase->Evaluate(tspack, dummydg) * gain;
 	return true;

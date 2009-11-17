@@ -28,6 +28,7 @@
 #include "error.h"
 #include "shape.h"
 #include "material.h"
+#include "texture.h"
 
 namespace lux {
 
@@ -96,6 +97,20 @@ boost::shared_ptr<Texture<SWCSpectrum> > MakeSWCSpectrumTexture(const string &na
 
 	LoadError("color texture", name);
 	return boost::shared_ptr<Texture<SWCSpectrum> >();
+}
+
+boost::shared_ptr<Texture<ConcreteFresnel> > MakeFresnelTexture(const string &name,
+	const Transform &tex2world, const TextureParams &tp)
+{
+	if (DynamicLoader::registeredFresnelTextures().find(name) !=
+		DynamicLoader::registeredFresnelTextures().end()) {
+		boost::shared_ptr<Texture<ConcreteFresnel> > ret(DynamicLoader::registeredFresnelTextures()[name](tex2world, tp));
+		tp.ReportUnused();
+		return ret;
+	}
+
+	LoadError("fresnel texture", name);
+	return boost::shared_ptr<Texture<ConcreteFresnel> >();
 }
 
 Light *MakeLight(const string &name,
@@ -177,7 +192,8 @@ VolumeIntegrator *MakeVolumeIntegrator(const string &name,
 }
 
 boost::shared_ptr<Aggregate> MakeAccelerator(const string &name,
-	const vector<boost::shared_ptr<Primitive> > &prims, const ParamSet &paramSet)
+	const vector<boost::shared_ptr<Primitive> > &prims,
+	const ParamSet &paramSet)
 {
 	if (DynamicLoader::registeredAccelerators().find(name) !=
 		DynamicLoader::registeredAccelerators().end()) {
@@ -298,6 +314,11 @@ map<string, DynamicLoader::CreateFloatTexture> &DynamicLoader::registeredFloatTe
 map<string, DynamicLoader::CreateSWCSpectrumTexture> &DynamicLoader::registeredSWCSpectrumTextures()
 {
 	static map<string, DynamicLoader::CreateSWCSpectrumTexture> *Map = new map<string, DynamicLoader::CreateSWCSpectrumTexture>;
+	return *Map;
+}
+map<string, DynamicLoader::CreateFresnelTexture> &DynamicLoader::registeredFresnelTextures()
+{
+	static map<string, DynamicLoader::CreateFresnelTexture> *Map = new map<string, DynamicLoader::CreateFresnelTexture>;
 	return *Map;
 }
 map<string, DynamicLoader::CreateLight> &DynamicLoader::registeredLights()
