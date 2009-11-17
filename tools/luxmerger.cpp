@@ -40,7 +40,7 @@
 #include "lux.h"
 #include "api.h"
 #include "context.h"
-#include "fleximage.h"
+#include "film/fleximage.h"
 #include "error.h"
 #include "osfunc.h"
 
@@ -97,7 +97,7 @@ int main(int ac, char *av[]) {
 
 		if (vm.count("help")) {
 			ss.str("");
-			ss << "Usage: flmmerger [options] file...\n" << visible;
+			ss << "Usage: luxmerger [options] file...\n" << visible;
 			luxError(LUX_SYSTEM, LUX_ERROR, ss.str().c_str());
 			return 0;
 		}
@@ -185,7 +185,7 @@ int main(int ac, char *av[]) {
 			film->WriteFilm(outputFileName);
 		} else {
 			ss.str("");
-			ss << "flmmerger: no input file";
+			ss << "luxmerger: no input file";
 			luxError(LUX_SYSTEM, LUX_ERROR, ss.str().c_str());
 		}
 
