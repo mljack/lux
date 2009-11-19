@@ -49,11 +49,12 @@ struct ParamArray;
 struct IncludeInfo {
 	string filename;
 	YY_BUFFER_STATE bufState;
-	int lineNum;
+	u_int lineNum;
 };
 vector<IncludeInfo> includeStack;
 
-extern int line_num;
+extern u_int line_num;
+extern string current_file;
 int str_pos;
 
 void add_string_char( char c )
@@ -85,7 +86,6 @@ void include_push(char *filename) {
             luxError(LUX_NOFILE,LUX_SEVERE,ss.str().c_str());
         } else {
             IncludeInfo ii;
-            extern string current_file;
             ii.filename = current_file;
             ii.bufState = YY_CURRENT_BUFFER;
             ii.lineNum = line_num;
@@ -102,8 +102,6 @@ void include_push(char *filename) {
 
 void include_pop(void)
 {
-	extern int line_num;
-	extern string current_file;
 	yy_delete_buffer(YY_CURRENT_BUFFER);
 	yy_switch_to_buffer(includeStack.back().bufState);
 	current_file = includeStack.back().filename;
@@ -172,7 +170,7 @@ WorldEnd 		{ return WORLDEND;		}
 \r /* jromang - do nothing */
 \n { line_num++; }
 {NUMBER} {
-  yylval.num = (float) atof(yytext);
+  yylval.num = static_cast<float>(atof(yytext));
   return NUM;
 }
 {IDENT} {
@@ -190,9 +188,7 @@ WorldEnd 		{ return WORLDEND;		}
 <STR>\\\" {add_string_char('\"');}
 <STR>\\\\ {add_string_char('\\');}
 <STR>\\[0-9]{3} {
-  int val = atoi(yytext+1);
-  while(val > 256)
-    val -= 256;
+  char val = static_cast<char>(atoi(yytext+1) & 0xff);
   add_string_char(val);
 }
 <STR>\\\n {line_num++;}
