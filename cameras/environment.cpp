@@ -77,8 +77,8 @@ bool EnvironmentCamera::Sample_W(const TsPack *tspack, const Scene *scene, float
 	Vector dpdu, dpdv;
 	CoordinateSystem(Vector(ns), &dpdu, &dpdv);
 	DifferentialGeometry dg(pos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-		BSDF_ALLOC(tspack, EnvironmentBxDF)());
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+		ARENA_ALLOC(tspack->arena, EnvironmentBxDF)());
 	*pdf = UniformSpherePdf();
 	*We = SWCSpectrum(*pdf);
 	return true;
@@ -90,8 +90,8 @@ bool EnvironmentCamera::Sample_W(const TsPack *tspack, const Scene *scene, const
 	Vector dpdu, dpdv;
 	CoordinateSystem(Vector(ns), &dpdu, &dpdv);
 	DifferentialGeometry dg(pos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-		BSDF_ALLOC(tspack, EnvironmentBxDF)());
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+		ARENA_ALLOC(tspack->arena, EnvironmentBxDF)());
 	*pdf = UniformSpherePdf();
 	*pdfDirect = 1.f;
 	visibility->SetSegment(p, pos, tspack->time);
@@ -102,21 +102,23 @@ bool EnvironmentCamera::Sample_W(const TsPack *tspack, const Scene *scene, const
 BBox EnvironmentCamera::Bounds() const
 {
 	BBox bound(pos);
-	bound.Expand(SHADOW_RAY_EPSILON);
+	bound.Expand(MachineEpsilon::E(bound));
+
 	return bound;
 }
 
-bool EnvironmentCamera::GetSamplePosition(const Point &p, const Vector &wi, float distance, float *x, float *y) const
+bool EnvironmentCamera::GetSamplePosition(const Point &p, const Vector &wi,
+	float distance, float *x, float *y) const
 {
-	if (distance < ClipHither || distance > ClipYon)
+	if (!isinf(distance) && (distance < ClipHither || distance > ClipYon))
 		return false;
 	const Vector w = WorldToCamera(wi);
 	const float cosTheta = w.y;
-	const float theta = acos(min(1.f, cosTheta));
+	const float theta = acosf(min(1.f, cosTheta));
 	*y = theta * film->yResolution * INV_PI;
 	const float sinTheta = sqrtf(Clamp(1.f - cosTheta * cosTheta, 1e-5f, 1.f));
 	const float cosPhi = w.x / sinTheta;
-	const float phi = acos(Clamp(cosPhi, -1.f, 1.f));
+	const float phi = acosf(Clamp(cosPhi, -1.f, 1.f));
 	if (w.z >= 0.f)
 		*x = phi * film->xResolution * INV_TWOPI;
 	else
@@ -168,7 +170,7 @@ Camera* EnvironmentCamera::CreateCamera(const Transform &world2camStart, const T
 		screen[2] = -1.f / frame;
 		screen[3] =  1.f / frame;
 	}
-	int swi;
+	u_int swi;
 	const float *sw = params.FindFloat("screenwindow", &swi);
 	if (sw && swi == 4)
 		memcpy(screen, sw, 4*sizeof(float));
