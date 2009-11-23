@@ -23,6 +23,7 @@
 // marble.cpp*
 #include "lux.h"
 #include "texture.h"
+#include "color.h"
 #include "paramset.h"
 
 // TODO - radiance - add methods for Power and Illuminant propagation
@@ -69,6 +70,24 @@ public:
 		s1 = (1.f - t) * s1 + t * s2;
 		// Extra scale of 1.5 to increase variation among colors
 		return SWCSpectrum(tspack, 1.5f * ((1.f - t) * s0 + t * s1));
+	}
+	virtual float Y() const {
+		static float c[][3] = { { .58f, .58f, .6f }, { .58f, .58f, .6f }, { .58f, .58f, .6f },
+			{ .5f, .5f, .5f }, { .6f, .59f, .58f }, { .58f, .58f, .6f },
+			{ .58f, .58f, .6f }, {.2f, .2f, .33f }, { .58f, .58f, .6f }, };
+		RGBColor cs(0.f);
+		for (u_int i = 0; i < NC; ++i)
+			cs += RGBColor(c[i]);
+		return cs.Y() / NC;
+	}
+	virtual float Filter() const {
+		static float c[][3] = { { .58f, .58f, .6f }, { .58f, .58f, .6f }, { .58f, .58f, .6f },
+			{ .5f, .5f, .5f }, { .6f, .59f, .58f }, { .58f, .58f, .6f },
+			{ .58f, .58f, .6f }, {.2f, .2f, .33f }, { .58f, .58f, .6f }, };
+		RGBColor cs(0.f);
+		for (u_int i = 0; i < NC; ++i)
+			cs += RGBColor(c[i]);
+		return cs.Filter() / NC;
 	}
 	
 	static Texture<float> * CreateFloatTexture(const Transform &tex2world, const TextureParams &tp);

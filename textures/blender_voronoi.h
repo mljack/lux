@@ -22,6 +22,7 @@
 
 #include "lux.h"
 #include "texture.h"
+#include "color.h"
 #include "paramset.h"
 #include "error.h"
 #include "blender_texlib.h"
@@ -85,19 +86,16 @@ public:
 		int resultType = multitex(&tex, &P.x, &texres);
 
         if((resultType & TEX_RGB) && (!(resultType & TEX_INT)))
-            texres.tin = (0.35 * texres.tr + 0.45 * texres.tg
-                    + 0.2 * texres.tb);
+            texres.tin = (0.35f * texres.tr + 0.45f * texres.tg
+                    + 0.2f * texres.tb);
 		else if((resultType & TEX_INT) && (!(resultType & TEX_RGB)))
             texres.tr = texres.tg = texres.tb = texres.tin;
 
 		T t1 = tex1->Evaluate(tspack, dg), t2 = tex2->Evaluate(tspack, dg);
 		return (1.f - texres.tin) * t1 + texres.tin * t2;
     }
-	virtual void SetPower(float power, float area) {
-		// Update sub-textures
-		tex1->SetPower(power, area);
-		tex2->SetPower(power, area);
-	}
+	virtual float Y() const { return (tex1->Y() + tex2->Y()) / 2.f; }
+	virtual float Filter() const { return (tex1->Filter() + tex2->Filter()) / 2.f; }
 	virtual void SetIlluminant() {
 		// Update sub-textures
 		tex1->SetIlluminant();
@@ -175,8 +173,8 @@ template <class T> Texture<SWCSpectrum> *BlenderVoronoiTexture3D<T>::CreateSWCSp
 	IdentityMapping3D *imap = (IdentityMapping3D*) map;
 	imap->Apply3DTextureMappingOptions(tp);
 
-	boost::shared_ptr<Texture<SWCSpectrum> > tex1 = tp.GetSWCSpectrumTexture("tex1", 1.f);
-	boost::shared_ptr<Texture<SWCSpectrum> > tex2 = tp.GetSWCSpectrumTexture("tex2", 0.f);
+	boost::shared_ptr<Texture<SWCSpectrum> > tex1 = tp.GetSWCSpectrumTexture("tex1", RGBColor(1.f));
+	boost::shared_ptr<Texture<SWCSpectrum> > tex2 = tp.GetSWCSpectrumTexture("tex2", RGBColor(0.f));
 
     // Dade - decode the distance metric
     short distType = TEX_DISTANCE;
