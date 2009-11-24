@@ -36,21 +36,20 @@ public:
 	// SpecularTransmission Public Methods
 	SpecularTransmission(const SWCSpectrum &t, Fresnel *fr, bool disp, bool archi = false)
 		: BxDF(BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR)),
-		  T(t), dispersive(disp), architectural(archi),
-		  fresnel(fr) {}
+		  T(t), fresnel(fr), dispersive(disp), architectural(archi) { }
 	virtual ~SpecularTransmission() { }
 	virtual void f(const TsPack *tspack, const Vector &wo, const Vector &wi, SWCSpectrum *const f) const;
 	virtual bool Sample_f(const TsPack *tspack, const Vector &wo, Vector *wi,
 		float u1, float u2, SWCSpectrum *const f, float *pdf, float *pdfBack = NULL, bool reverse = false) const;
 	virtual float Weight(const TsPack *tspack, const Vector &wo) const;
 	virtual float Pdf(const TsPack *tspack, const Vector &wo, const Vector &wi) const {
-		return (architectural && Dot(wo, wi) < SHADOW_RAY_EPSILON - 1.f) ? 1.f : 0.f;
+		return (architectural && Dot(wo, wi) < MachineEpsilon::E(1.f) - 1.f) ? 1.f : 0.f;
 	}
 private:
 	// SpecularTransmission Private Data
 	SWCSpectrum T;
-	bool dispersive, architectural;
 	Fresnel *fresnel;
+	bool dispersive, architectural;
 };
 
 }//namespace lux

@@ -21,14 +21,11 @@
  ***************************************************************************/
 
 // exrio.cpp*
-//#ifdef __APPLE__
 #include "lux.h"
 #include "error.h"
 #include "color.h"
-#include "color.h"
 #include "spectrum.h"
 #include "imagereader.h"
-//#endif
 #include <algorithm>
 
 #include <boost/filesystem/path.hpp>
@@ -108,10 +105,10 @@ namespace lux {
 
 			InputFile file(name.c_str());
             Box2i dw = file.header().dataWindow();
-            int width = dw.max.x - dw.min.x + 1;
-            int height = dw.max.y - dw.min.y + 1;
+            u_int width = dw.max.x - dw.min.x + 1;
+            u_int height = dw.max.y - dw.min.y + 1;
             //todo: verify if this is always correct
-            int noChannels = 3;
+            u_int noChannels = 3;
 
 			ss.str("");
 			ss << width << "x" << height << " (" << noChannels << " channels)";
@@ -133,7 +130,7 @@ namespace lux {
             ImageData* data = new ImageData(width, height, ImageData::FLOAT_TYPE, noChannels, ret);
 
             // XXX should do real RGB -> RGBColor conversion here
-            for (int i = 0; i < width * height; ++i) {
+            for (u_int i = 0; i < width * height; ++i) {
                 float c[3] = { rgb[(3 * i)], rgb[(3 * i) + 1], rgb[(3 * i) + 2] };
                 ret[i] = TextureColor<float, 3 > (c);
 
@@ -162,10 +159,10 @@ namespace lux {
         if (size == 4)
             type = ImageData::FLOAT_TYPE;
 
-        int width = image.dimx();
-        int height = image.dimy();
-        int noChannels = image.dimv();
-        int pixels = width * height;
+        u_int width = image.dimx();
+        u_int height = image.dimy();
+        u_int noChannels = image.dimv();
+        u_int pixels = width * height;
 
 		stringstream ss;
 		ss.str("");
@@ -193,11 +190,11 @@ namespace lux {
         T *c = new T[noChannels];
         c[0] = 0;
         // XXX should do real RGB -> RGBColor conversion here
-        for (int i = 0; i < width; ++i)
-            for (int j = 0; j < height; ++j) {
-                for (int k = 0; k < noChannels; ++k) {
+        for (u_int i = 0; i < width; ++i)
+            for (u_int j = 0; j < height; ++j) {
+                for (u_int k = 0; k < noChannels; ++k) {
                     // assuming that cimg depth is 1, single image layer
-                    unsigned long off = i + (j * width) + (k * pixels);
+                    u_int off = i + (j * width) + (k * pixels);
 
 					if (noChannels == 1)
 						((TextureColor<T, 1> *)ret)[i + (j * width)].c[k] = image[off];
@@ -243,7 +240,7 @@ namespace lux {
 		try {
 			boost::filesystem::path imagePath(name);
 			// boost::filesystem::exists() can throw an exception under Windows
-			// if the driver in imagePath doesn't exist
+			// if the drive in imagePath doesn't exist
 			if (!boost::filesystem::exists(imagePath)) {
 				std::stringstream ss;
 				ss << "Unable to open image file '" << imagePath.string() << "'";
@@ -318,9 +315,9 @@ namespace lux {
     }
 
    void WriteOpenEXRImage(int channeltype, bool halftype, bool savezbuf, int compressiontype, const string &name, vector<RGBColor> &pixels,
-            vector<float> &alpha, int xRes, int yRes,
-            int totalXRes, int totalYRes,
-            int xOffset, int yOffset, vector<float> &zbuf) {
+            vector<float> &alpha, u_int xRes, u_int yRes,
+            u_int totalXRes, u_int totalYRes,
+            u_int xOffset, u_int yOffset, vector<float> &zbuf) {
 		Header header(totalXRes, totalYRes);
 
 		// Set Compression
@@ -384,8 +381,8 @@ namespace lux {
 		half *hy = NULL;
 		half *hrgb = NULL;
 		half *ha = NULL;
-		const int bufSize = xRes * yRes;
-		const int bufOffset = xOffset + yOffset * xRes;
+		const u_int bufSize = xRes * yRes;
+		const u_int bufOffset = xOffset + yOffset * xRes;
 
 		if(!halftype) {
 			// Write framebuffer data for 32bit FLOAT type
@@ -393,7 +390,7 @@ namespace lux {
 				// Save Y
 				fy = new float[bufSize];
 				// FIXME use the correct color space
-				for (int i = 0; i < bufSize; ++i)
+				for (u_int i = 0; i < bufSize; ++i)
 					fy[i] = (0.3f * pixels[i].c[0]) + (0.59f * pixels[i].c[1]) + (0.11f * pixels[i].c[2]);
 				fy -= (xOffset + yOffset * xRes);
 				fb.insert("Y", Slice(Imf::FLOAT, (char *)(fy - bufOffset), sizeof(float), xRes * sizeof(float)));
@@ -415,14 +412,14 @@ namespace lux {
 				// Save Y
 				hy = new half[bufSize];
 				//FIXME use correct color space
-				for (int i = 0; i < bufSize; ++i)
+				for (u_int i = 0; i < bufSize; ++i)
 					hy[i] = (0.3f * pixels[i].c[0]) + (0.59f * pixels[i].c[1]) + (0.11f * pixels[i].c[2]);
 				fb.insert("Y", Slice(HALF, (char *)(hy - bufOffset), sizeof(half), xRes * sizeof(half)));
 			} else if(channeltype >= 2) {
 				// Save RGB
 				hrgb = new half[3 * bufSize];
-				for (int i = 0; i < bufSize; ++i)
-					for( int j = 0; j < 3; j++)
+				for (u_int i = 0; i < bufSize; ++i)
+					for( u_int j = 0; j < 3; j++)
 						hrgb[3 * i + j] = pixels[i].c[j];
 				fb.insert("R", Slice(HALF, (char *)(hrgb - 3 * bufOffset), 3 * sizeof(half), xRes * (3 * sizeof(half))));
 				fb.insert("G", Slice(HALF, (char *)(hrgb - 3 * bufOffset) + sizeof(half), 3 * sizeof(half), xRes * (3 * sizeof(half))));
@@ -431,7 +428,7 @@ namespace lux {
 			if(channeltype == 1 || channeltype == 3) {
 				// Add alpha
 				ha = new half[bufSize];
-				for (int i = 0; i < bufSize; ++i)
+				for (u_int i = 0; i < bufSize; ++i)
 					ha[i] = alpha[i];		
 				fb.insert("A", Slice(HALF, (char *)(ha - bufOffset), sizeof(half), xRes * sizeof(half)));
 			}
