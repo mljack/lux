@@ -136,9 +136,9 @@ bool OrthoCamera::Sample_W(const TsPack *tspack, const Scene *scene, float u1, f
 	Point psC(RasterToCameraBidir(Point(u1, u2, 0.f)));
 	Point ps = CameraToWorld(psC);
 	DifferentialGeometry dg(ps, normal, CameraToWorld(Vector(1, 0, 0)), CameraToWorld(Vector(0, 1, 0)), Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, normal,
-		BSDF_ALLOC(tspack, SpecularReflection)(SWCSpectrum(1.f),
-		BSDF_ALLOC(tspack, FresnelNoOp)(), 0.f, 0.f));
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, normal,
+		ARENA_ALLOC(tspack->arena, SpecularReflection)(SWCSpectrum(1.f),
+		ARENA_ALLOC(tspack->arena, FresnelNoOp)(), 0.f, 0.f));
 	*pdf = posPdf;
 	*We = SWCSpectrum(posPdf);
 	return true;
@@ -149,7 +149,7 @@ bool OrthoCamera::Sample_W(const TsPack *tspack, const Scene *scene, const Point
 }
 bool OrthoCamera::GetSamplePosition(const Point &p, const Vector &wi, float distance, float *x, float *y) const
 {
-	if (Dot(wi, normal) < 1.f - MachineEpsilon::E(1.f) || distance < ClipHither || distance > ClipYon)
+	if (Dot(wi, normal) < 1.f - MachineEpsilon::E(1.f) || (!isinf(distance) && (distance < ClipHither || distance > ClipYon)))
 		return false;
 	Point ps(WorldToRasterBidir(p));
 	*x = ps.x;
@@ -209,7 +209,7 @@ Camera* OrthoCamera::CreateCamera(const Transform &world2camStart, const Transfo
 		screen[2] = -1.f / frame;
 		screen[3] =  1.f / frame;
 	}
-	int swi;
+	u_int swi;
 	const float *sw = params.FindFloat("screenwindow", &swi);
 	if (sw && swi == 4)
 		memcpy(screen, sw, 4*sizeof(float));

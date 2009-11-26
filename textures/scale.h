@@ -24,6 +24,7 @@
 // scale.cpp*
 #include "lux.h"
 #include "texture.h"
+#include "color.h"
 #include "paramset.h"
 
 namespace lux
@@ -43,11 +44,9 @@ public:
 	virtual T2 Evaluate(const TsPack *tspack, const DifferentialGeometry &dg) const {
 		return tex1->Evaluate(tspack, dg) * tex2->Evaluate(tspack, dg);
 	}
-	virtual void SetPower(float power, float area) {
-		// Update sub-textures
-		tex1->SetPower(power, area);
-		tex2->SetPower(power, area);
-	}
+	// In Y() one of the textures must use Filter to avoid double W->lm conv
+	virtual float Y() const { return tex1->Filter() * tex2->Y(); }
+	virtual float Filter() const { return tex1->Filter() * tex2->Filter(); }
 	virtual void SetIlluminant() {
 		// Update sub-textures
 		tex1->SetIlluminant();

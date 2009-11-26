@@ -25,11 +25,12 @@
 // Simulate car paint - adopted from Gunther et al, "Effcient Acquisition and Realistic Rendering of Car Paint", 2005
 
 #include "carpaint.h"
+#include "memory.h"
 #include "bxdf.h"
 #include "blinn.h"
 #include "fresnelslick.h"
 #include "microfacet.h"
-#include "constant.h"
+#include "textures/constant.h"
 #include "fresnelblend.h"
 #include "paramset.h"
 #include "dynload.h"
@@ -70,7 +71,7 @@ BSDF *CarPaint::GetBSDF(const TsPack *tspack, const DifferentialGeometry &dgGeom
 	else
 		dgs = dgShading;
 
-	MultiBSDF *bsdf = BSDF_ALLOC(tspack, MultiBSDF)(dgs, dgGeom.nn);
+	MultiBSDF *bsdf = ARENA_ALLOC(tspack->arena, MultiBSDF)(dgs, dgGeom.nn);
 
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
 	SWCSpectrum kd = Kd->Evaluate(tspack, dgs).Clamp(0.f, 1.f);
@@ -91,41 +92,41 @@ BSDF *CarPaint::GetBSDF(const TsPack *tspack, const DifferentialGeometry &dgGeom
 	float m2 = M2->Evaluate(tspack, dgs);
 	float m3 = M3->Evaluate(tspack, dgs);
 
-	MicrofacetDistribution *md1 = BSDF_ALLOC(tspack, Blinn)((2.0 * M_PI / (m1 * m1)) - 1.0);
-	MicrofacetDistribution *md2 = BSDF_ALLOC(tspack, Blinn)((2.0 * M_PI / (m2 * m2)) - 1.0);
-	MicrofacetDistribution *md3 = BSDF_ALLOC(tspack, Blinn)((2.0 * M_PI / (m3 * m3)) - 1.0);
+	MicrofacetDistribution *md1 = ARENA_ALLOC(tspack->arena, Blinn)((2.f * M_PI / (m1 * m1)) - 1.f);
+	MicrofacetDistribution *md2 = ARENA_ALLOC(tspack->arena, Blinn)((2.f * M_PI / (m2 * m2)) - 1.f);
+	MicrofacetDistribution *md3 = ARENA_ALLOC(tspack->arena, Blinn)((2.f * M_PI / (m3 * m3)) - 1.f);
 
 	// The Slick approximation is much faster and visually almost the same
-	Fresnel *fr1 = BSDF_ALLOC(tspack, FresnelSlick)(r1);
-	Fresnel *fr2 = BSDF_ALLOC(tspack, FresnelSlick)(r2);
-	Fresnel *fr3 = BSDF_ALLOC(tspack, FresnelSlick)(r3);
+	Fresnel *fr1 = ARENA_ALLOC(tspack->arena, FresnelSlick)(r1);
+	Fresnel *fr2 = ARENA_ALLOC(tspack->arena, FresnelSlick)(r2);
+	Fresnel *fr3 = ARENA_ALLOC(tspack->arena, FresnelSlick)(r3);
 
 	// The Carpaint BRDF is really a Multi-lobe Microfacet model with a Lambertian base
 
-	SWCSpectrum *lobe_ks = (SWCSpectrum *)BSDF::Alloc(tspack, 3 * sizeof(SWCSpectrum));
+	SWCSpectrum *lobe_ks = static_cast<SWCSpectrum *>(tspack->arena->Alloc(3 * sizeof(SWCSpectrum)));
 	lobe_ks[0] = ks1;
 	lobe_ks[1] = ks2;
 	lobe_ks[2] = ks3;
 
-	MicrofacetDistribution **lobe_dist = (MicrofacetDistribution **)BSDF::Alloc(tspack, 3 * sizeof(MicrofacetDistribution *));
+	MicrofacetDistribution **lobe_dist = static_cast<MicrofacetDistribution **>(tspack->arena->Alloc(3 * sizeof(MicrofacetDistribution *)));
 	lobe_dist[0] = md1;
 	lobe_dist[1] = md2;
 	lobe_dist[2] = md3;
 
-	Fresnel **lobe_fres = (Fresnel **)BSDF::Alloc(tspack, 3 * sizeof(Fresnel *));
+	Fresnel **lobe_fres = static_cast<Fresnel **>(tspack->arena->Alloc(3 * sizeof(Fresnel *)));
 	lobe_fres[0] = fr1;
 	lobe_fres[1] = fr2;
 	lobe_fres[2] = fr3;
 
 	// Broad gloss layers
 	for (int i = 0; i < 2; i++) {
-		bsdf->Add(BSDF_ALLOC(tspack, Microfacet)(lobe_ks[i], lobe_fres[i], lobe_dist[i]));
+		bsdf->Add(ARENA_ALLOC(tspack->arena, Microfacet)(lobe_ks[i], lobe_fres[i], lobe_dist[i]));
 	}
 
 	// Clear coat and lambertian base
-	bsdf->Add(BSDF_ALLOC(tspack, FresnelBlend)(kd, lobe_ks[2], ka, ld, lobe_dist[2]));
+	bsdf->Add(ARENA_ALLOC(tspack->arena, FresnelBlend)(kd, lobe_ks[2], ka, ld, lobe_dist[2]));
 
-	//bsdf->Add(BSDF_ALLOC(tspack, CookTorrance)(kd, 3, lobe_ks, lobe_dist, lobe_fres));
+	//bsdf->Add(ARENA_ALLOC(tspack->arena, CookTorrance)(kd, 3, lobe_ks, lobe_dist, lobe_fres));
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(compParams);
@@ -155,16 +156,16 @@ void DataFromName(const string name, boost::shared_ptr<Texture<SWCSpectrum> > *K
 							  break;
 					  }
 
-					  boost::shared_ptr<Texture<SWCSpectrum> > kd (new ConstantRGBColorTexture<SWCSpectrum>(carpaintdata[i].kd));
-					  boost::shared_ptr<Texture<SWCSpectrum> > ks1 (new ConstantRGBColorTexture<SWCSpectrum>(carpaintdata[i].ks1));
-					  boost::shared_ptr<Texture<SWCSpectrum> > ks2 (new ConstantRGBColorTexture<SWCSpectrum>(carpaintdata[i].ks2));
-					  boost::shared_ptr<Texture<SWCSpectrum> > ks3 (new ConstantRGBColorTexture<SWCSpectrum>(carpaintdata[i].ks3));
-					  boost::shared_ptr<Texture<float> > r1 (new ConstantFloatTexture<float>(carpaintdata[i].r1));
-					  boost::shared_ptr<Texture<float> > r2 (new ConstantFloatTexture<float>(carpaintdata[i].r2));
-					  boost::shared_ptr<Texture<float> > r3 (new ConstantFloatTexture<float>(carpaintdata[i].r3));
-					  boost::shared_ptr<Texture<float> > m1 (new ConstantFloatTexture<float>(carpaintdata[i].m1));
-					  boost::shared_ptr<Texture<float> > m2 (new ConstantFloatTexture<float>(carpaintdata[i].m2));
-					  boost::shared_ptr<Texture<float> > m3 (new ConstantFloatTexture<float>(carpaintdata[i].m3));
+					  boost::shared_ptr<Texture<SWCSpectrum> > kd (new ConstantRGBColorTexture(carpaintdata[i].kd));
+					  boost::shared_ptr<Texture<SWCSpectrum> > ks1 (new ConstantRGBColorTexture(carpaintdata[i].ks1));
+					  boost::shared_ptr<Texture<SWCSpectrum> > ks2 (new ConstantRGBColorTexture(carpaintdata[i].ks2));
+					  boost::shared_ptr<Texture<SWCSpectrum> > ks3 (new ConstantRGBColorTexture(carpaintdata[i].ks3));
+					  boost::shared_ptr<Texture<float> > r1 (new ConstantFloatTexture(carpaintdata[i].r1));
+					  boost::shared_ptr<Texture<float> > r2 (new ConstantFloatTexture(carpaintdata[i].r2));
+					  boost::shared_ptr<Texture<float> > r3 (new ConstantFloatTexture(carpaintdata[i].r3));
+					  boost::shared_ptr<Texture<float> > m1 (new ConstantFloatTexture(carpaintdata[i].m1));
+					  boost::shared_ptr<Texture<float> > m2 (new ConstantFloatTexture(carpaintdata[i].m2));
+					  boost::shared_ptr<Texture<float> > m3 (new ConstantFloatTexture(carpaintdata[i].m3));
 
 					  *Kd = kd;
 					  *Ks1 = ks1;
