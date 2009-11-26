@@ -3511,9 +3511,16 @@ void LuxGui::OnError(wxLuxErrorEvent &event) {
 	// Feature request #584: Show a dialog in case of warning/error
 	if (m_showWarningDialog && severity > LUX_INFO) {
 		m_showWarningDialog = false;
-		wxMessageBox(wxT("There was an abnormal condition reported. Please, check the Log tab for more information."),
-			wxT("LuxRender Notification"),
-			wxOK | (severity == LUX_WARNING ? wxICON_EXCLAMATION : wxICON_ERROR), this);
+		if (severity < LUX_SEVERE) {
+			wxMessageBox(wxT("There was an abnormal condition reported. Please, check the Log tab for more information."),
+				wxT("LuxRender Notification"),
+				wxOK | (severity == LUX_WARNING ? wxICON_EXCLAMATION : wxICON_ERROR), this);
+
+		} else {
+			wxMessageBox(wxT("There was severe error reported. Please, check the Log tab for more information."),
+				wxT("LuxRender Error"),
+				wxOK | wxICON_STOP, this);
+		}
 	}
 }
 
@@ -3627,7 +3634,6 @@ void LuxGui::OnCommand(wxCommandEvent &event) {
 		m_progDialog = NULL;
 		m_loadTimer->Stop();
 
-		wxMessageBox(wxT("Scene file parse error.\nSee log for details."), wxT("Error"), wxOK | wxICON_ERROR, this);
 		ChangeRenderState(FINISHED);
 	} else if(event.GetEventType() == wxEVT_LUX_FLMLOADERROR) {
 		wxMessageBox(wxT("FLM load error.\nSee log for details."), wxT("Error"), wxOK | wxICON_ERROR, this);
