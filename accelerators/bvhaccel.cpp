@@ -40,7 +40,7 @@ using std::ptr_fun;
 using namespace lux;
 
 // BVHAccel Method Definitions
-BVHAccel::BVHAccel(const vector<boost::shared_ptr<Primitive> > &p, int treetype, int csamples, int icost, int tcost, float ebonus) :
+BVHAccel::BVHAccel(const vector<boost::shared_ptr<Primitive> > &p, u_int treetype, int csamples, int icost, int tcost, float ebonus) :
 			costSamples(csamples), isectCost(icost), traversalCost(tcost), emptyBonus(ebonus) {
 	vector<boost::shared_ptr<Primitive> > vPrims;
 	const PrimitiveRefinementHints refineHints(false);
@@ -116,7 +116,8 @@ boost::shared_ptr<BVHAccelTreeNode> BVHAccel::BuildHierarchy(vector<boost::share
 	boost::shared_ptr<BVHAccelTreeNode> parent(new BVHAccelTreeNode());
 	parent->primitive = NULL;
 
-	vector<u_int> splits; splits.reserve(treeType+1);
+	vector<u_int> splits;
+	splits.reserve(treeType + 1);
 	splits.push_back(begin); splits.push_back(end);
 	for(u_int i = 2; i <= treeType; i *= 2) {  //Calculate splits, according to tree type and do partition
 		for(u_int j = 0, offset = 0; j+offset < i && splits.size() > j+1; j += 2) {
@@ -184,7 +185,7 @@ void BVHAccel::FindBestSplit(vector<boost::shared_ptr<BVHAccelTreeNode> > &list,
 		Point mean2(0,0,0), var(0,0,0);
 		for(u_int i = begin; i < end; i++)
 			mean2 += list[i]->bbox.pMax+list[i]->bbox.pMin;
-		mean2 /= end-begin;
+		mean2 /= end - begin;
 
 		// Calculate variance
 		for(u_int i = begin; i < end; i++) {
@@ -264,8 +265,7 @@ BBox BVHAccel::WorldBound() const {
 	return bvhTree[0].bbox;
 }
 
-bool BVHAccel::Intersect(const Ray &ray,
-                          Intersection *isect) const {
+bool BVHAccel::Intersect(const Ray &ray, Intersection *isect) const {
 	u_int currentNode = 0; // Root Node
 	u_int stopNode = bvhTree[0].skipIndex; // Non-existent
 	bool hit = false;
