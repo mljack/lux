@@ -24,6 +24,7 @@
 #define LUX_CONTEXT_H
 
 #include "lux.h"
+#include "geometry/transform.h"
 #include "paramset.h"
 
 #include <boost/thread/mutex.hpp>
@@ -42,13 +43,13 @@ class FlexImageFilm;
 class Context {
 public:
 
-	Context(std::string n="Lux default context") : name(n) {
-            init();
+	Context(std::string n = "Lux default context") : name(n) {
+		init();
 	}
 
-        ~Context() {
-            free();
-        }
+	~Context() {
+		free();
+	}
 
 	//static bool checkMode(unsigned char modeMask, std::string callerName, int errorCode); //!< Check the graphics state mode in the active context
 
@@ -67,6 +68,9 @@ public:
 	}
 	static map<string, boost::shared_ptr<Texture<SWCSpectrum> > > *getActiveSWCSpectrumTextures() {
 		return &(activeContext->graphicsState->colorTextures);
+	}
+	static map<string, boost::shared_ptr<Texture<ConcreteFresnel> > > *getActiveFresnelTextures() {
+		return &(activeContext->graphicsState->fresnelTextures);
 	}
 	static u_int getActiveLightGroup() {
 		return activeContext->GetActiveLightGroup();
@@ -142,34 +146,34 @@ public:
 	}
 
 	//controlling number of threads
-	static int luxAddThread() { return activeContext->addThread(); }
+	static u_int luxAddThread() { return activeContext->addThread(); }
 	static void luxRemoveThread() { activeContext->removeThread(); }
-	static int luxGetRenderingThreadsStatus(RenderingThreadInfo *info, int maxInfoCount) { return activeContext->getRenderingThreadsStatus(info, maxInfoCount); }
+	static u_int luxGetRenderingThreadsStatus(RenderingThreadInfo *info, u_int maxInfoCount) { return activeContext->getRenderingThreadsStatus(info, maxInfoCount); }
 
 	//framebuffer access
 	static void luxUpdateFramebuffer() { activeContext->updateFramebuffer(); }
 	static unsigned char* luxFramebuffer() { return activeContext->framebuffer(); }
 
 	//histogram access
-	static void luxGetHistogramImage(unsigned char *outPixels, int width, int height, int options){ activeContext->getHistogramImage(outPixels, width, height, options); }
+	static void luxGetHistogramImage(unsigned char *outPixels, u_int width, u_int height, int options){ activeContext->getHistogramImage(outPixels, width, height, options); }
 
 	// Parameter Access functions
-	static void luxSetParameterValue(luxComponent comp, luxComponentParameters param, double value, int index) { 
+	static void luxSetParameterValue(luxComponent comp, luxComponentParameters param, double value, u_int index) { 
 		activeContext->SetParameterValue(comp, param, value, index);
 	}
-	static double luxGetParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+	static double luxGetParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 		return activeContext->GetParameterValue(comp, param, index);
 	}
-	static double luxGetDefaultParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+	static double luxGetDefaultParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 		return activeContext->GetDefaultParameterValue(comp, param, index);
 	}
-	static void luxSetStringParameterValue(luxComponent comp, luxComponentParameters param, const string& value, int index) { 
+	static void luxSetStringParameterValue(luxComponent comp, luxComponentParameters param, const string& value, u_int index) { 
 		activeContext->SetStringParameterValue(comp, param, value, index);
 	}
-	static string luxGetStringParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+	static string luxGetStringParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 		return activeContext->GetStringParameterValue(comp, param, index);
 	}
-	static string luxGetDefaultStringParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+	static string luxGetDefaultStringParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 		return activeContext->GetDefaultStringParameterValue(comp, param, index);
 	}
 
@@ -179,8 +183,8 @@ public:
 	static int luxGetNetworkServerUpdateInterval() { return activeContext->getNetworkServerUpdateInterval(); }
     static void luxAddServer(const string &name) { activeContext->addServer(name); }
     static void luxRemoveServer(const string &name) { activeContext->removeServer(name); }
-    static int luxGetServerCount() { return activeContext->getServerCount(); }
-	static int luxGetRenderingServersStatus(RenderingServerInfo *info, int maxInfoCount) { return activeContext->getRenderingServersStatus(info, maxInfoCount); }
+    static u_int luxGetServerCount() { return activeContext->getServerCount(); }
+	static u_int luxGetRenderingServersStatus(RenderingServerInfo *info, u_int maxInfoCount) { return activeContext->getRenderingServersStatus(info, maxInfoCount); }
 
 	//statistics
 	static void luxSceneReady() { activeContext->sceneReady(); }
@@ -199,11 +203,6 @@ public:
 	static void luxSetEpsilon(const float minValue, const float maxValue) { activeContext->setEpsilon(minValue, maxValue); }
 
 private:
-	static Context *activeContext;
-	string name;
-	Scene *luxCurrentScene;
-	bool luxCurrentSceneReady;
-	
 	void init();
 	void free();
 
@@ -267,24 +266,24 @@ private:
 		bool suspendThreadsWhenDone);
 
 	//controlling number of threads
-	int addThread();
+	u_int addThread();
 	void removeThread();
-	int getRenderingThreadsStatus(RenderingThreadInfo *info, int maxInfoCount);
+	u_int getRenderingThreadsStatus(RenderingThreadInfo *info, u_int maxInfoCount);
 
 	//framebuffer access
 	void updateFramebuffer();
 	unsigned char* framebuffer();
 
 	//histogram access
-	void getHistogramImage(unsigned char *outPixels, int width, int height, int options);
+	void getHistogramImage(unsigned char *outPixels, u_int width, u_int height, int options);
 
 	// Parameter Access functions
-	void SetParameterValue(luxComponent comp, luxComponentParameters param, double value, int index);
-	double GetParameterValue(luxComponent comp, luxComponentParameters param, int index);
-	double GetDefaultParameterValue(luxComponent comp, luxComponentParameters param, int index);
-	void SetStringParameterValue(luxComponent comp, luxComponentParameters param, const string& value, int index);
-	string GetStringParameterValue(luxComponent comp, luxComponentParameters param, int index);
-	string GetDefaultStringParameterValue(luxComponent comp, luxComponentParameters param, int index);
+	void SetParameterValue(luxComponent comp, luxComponentParameters param, double value, u_int index);
+	double GetParameterValue(luxComponent comp, luxComponentParameters param, u_int index);
+	double GetDefaultParameterValue(luxComponent comp, luxComponentParameters param, u_int index);
+	void SetStringParameterValue(luxComponent comp, luxComponentParameters param, const string& value, u_int index);
+	string GetStringParameterValue(luxComponent comp, luxComponentParameters param, u_int index);
+	string GetDefaultStringParameterValue(luxComponent comp, luxComponentParameters param, u_int index);
 
 	u_int GetActiveLightGroup();
 	/*
@@ -296,18 +295,18 @@ private:
 	void updateFilmFromNetwork();
 	void setNetworkServerUpdateInterval(int updateInterval);
 	int getNetworkServerUpdateInterval();
-    void transmitFilm(std::basic_ostream<char> &stream);
+	void transmitFilm(std::basic_ostream<char> &stream);
 
 	//statistics
 	double statistics(const string &statName);
 	void sceneReady();
 	void addServer(const string &name);
 	void removeServer(const string &name);
-	int getServerCount();
-	int getRenderingServersStatus(RenderingServerInfo *info, int maxInfoCount);
+	u_int getServerCount();
+	u_int getRenderingServersStatus(RenderingServerInfo *info, u_int maxInfoCount);
 
-    void enableDebugMode();
-    void disableRandomMode();
+	void enableDebugMode();
+	void disableRandomMode();
 
 	void setEpsilon(const float minValue, const float maxValue);
 
@@ -344,15 +343,15 @@ private:
 		ParamSet CameraParams;
 		Transform WorldToCamera;
 		Transform WorldToCameraEnd;
-		bool gotSearchPath;
 		mutable vector<Light *> lights;
 		mutable vector<boost::shared_ptr<Primitive> > primitives;
 		mutable vector<VolumeRegion *> volumeRegions;
 		mutable map<string, vector<boost::shared_ptr<Primitive> > > instances;
+		mutable vector<string> lightGroups;
 		mutable vector<boost::shared_ptr<Primitive> > *currentInstance;
+		bool gotSearchPath;
 		bool debugMode;
 		bool randomMode;
-		mutable vector<string> lightGroups;
 	};
 
 	struct NamedMaterial {
@@ -373,6 +372,7 @@ private:
 		// Graphics State
 		map<string, boost::shared_ptr<Texture<float> > > floatTextures;
 		map<string, boost::shared_ptr<Texture<SWCSpectrum> > > colorTextures;
+		map<string, boost::shared_ptr<Texture<ConcreteFresnel> > > fresnelTextures;
 		ParamSet materialParams;
 		string material;
 		ParamSet areaLightParams;
@@ -387,7 +387,9 @@ private:
 		bool reverseOrientation;
 	};
 
-	bool terminated;
+	static Context *activeContext;
+	string name;
+	Scene *luxCurrentScene;
 	int currentApiState;
 	Transform curTransform;
 	map<string, Transform> namedCoordinateSystems;
@@ -402,6 +404,8 @@ private:
 	
 	// Dade - mutex used to wait the end of the rendering
 	mutable boost::mutex renderingMutex;
+	bool luxCurrentSceneReady;
+	bool terminated;
 };
 
 }

@@ -20,35 +20,53 @@
  *   Lux Renderer website : http://www.luxrender.net                       *
  ***************************************************************************/
 
-#include "shape.h"
-#include "mc.h"
-#include "quadrilateral.h"
+#ifndef RENDERVIEW_H
+#define RENDERVIEW_H
 
-namespace lux
+#include <QtGui/QGraphicsView>
+#include <QtGui/QGraphicsScene>
+#include <QApplication>
+#include <QEvent>
+#include <QGraphicsPixmapItem>
+#include <QWheelEvent>
+#include <QMouseEvent>
+#include <QMatrix>
+#include <QPoint>
+#include <QClipboard>
+#include <QtOpenGL/QGLWidget>
+
+#include "api.h"
+#include "lux.h"
+
+class RenderView : public QGraphicsView
 {
+	Q_OBJECT
 
-// Quad Declarations
-class Quad : public Shape {
 public:
-	// Quad Public Methods
-	Quad(const Transform &o2w, bool ro, int nq, int nv, 
-		const int *vi, const Point *P);
-	virtual ~Quad();
-	virtual BBox ObjectBound() const;
-	virtual BBox WorldBound() const;
-	virtual bool Intersect(const Ray &ray, float *tHit,
-	               DifferentialGeometry *dg) const;
-	virtual bool IntersectP(const Ray &ray) const;
-	virtual float Area() const;
-	virtual Point Sample(float u1, float u2, float u3, Normal *Ns) const {
-		return quad->Sample(u1, u2, u3, Ns);
-	}
-	
-	static Shape* CreateShape(const Transform &o2w, bool reverseOrientation, const ParamSet &params);
+
+	RenderView(QWidget *parent = 0, bool opengl = false);
+    ~RenderView ();
+
+	void resetZoom ();
+	void setZoomEnabled (bool enabled = true) { zoomEnabled = enabled; };
+	void reload ();
+	void setLogoMode ();
+
+	void copyToClipboard ();
+
 private:
-	// Quad Private Data	
-	QuadMesh *mesh;
-	Quadrilateral *quad;
+
+	bool zoomEnabled;
+	QPoint currentpos;
+
+	QGraphicsScene *renderscene;
+	QGraphicsPixmapItem *luxlogo;
+	QGraphicsPixmapItem *luxfb;
+
+	void wheelEvent (QWheelEvent *event);
+	void mousePressEvent (QMouseEvent *event);
+	//void mouseReleaseEvent (QMouseEvent* event);
+	//void mouseMoveEvent (QMouseEvent* event);
 };
 
-}//namespace lux
+#endif // RENDERVIEW_H

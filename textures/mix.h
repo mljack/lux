@@ -23,6 +23,7 @@
 // mix.cpp*
 #include "lux.h"
 #include "texture.h"
+#include "color.h"
 #include "paramset.h"
 
 namespace lux
@@ -44,13 +45,10 @@ public:
 	virtual T Evaluate(const TsPack *tspack, const DifferentialGeometry &dg) const {
 		T t1 = tex1->Evaluate(tspack, dg), t2 = tex2->Evaluate(tspack, dg);
 		float amt = amount->Evaluate(tspack, dg);
-		return (1.f - amt) * t1 + amt * t2;
+		return Lerp(amt, t1, t2);
 	}
-	virtual void SetPower(float power, float area) {
-		// Update sub-textures
-		tex1->SetPower(power, area);
-		tex2->SetPower(power, area);
-	}
+	virtual float Y() const { return Lerp(amount->Y(), tex1->Y(), tex2->Y()); }
+	virtual float Filter() const { return Lerp(amount->Y(), tex1->Filter(), tex2->Filter()); }
 	virtual void SetIlluminant() {
 		// Update sub-textures
 		tex1->SetIlluminant();
@@ -75,8 +73,8 @@ template <class T> Texture<float> * MixTexture<T>::CreateFloatTexture(const Tran
 template <class T> Texture<SWCSpectrum> * MixTexture<T>::CreateSWCSpectrumTexture(const Transform &tex2world,
 		const TextureParams &tp) {
 	return new MixTexture<SWCSpectrum>(
-		tp.GetSWCSpectrumTexture("tex1", 0.f),
-		tp.GetSWCSpectrumTexture("tex2", 1.f),
+		tp.GetSWCSpectrumTexture("tex1", RGBColor(0.f)),
+		tp.GetSWCSpectrumTexture("tex2", RGBColor(1.f)),
 		tp.GetFloatTexture("amount", 0.5f));
 }
 
