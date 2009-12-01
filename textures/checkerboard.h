@@ -133,11 +133,7 @@ public:
 			return tex1->Evaluate(tspack, dg);
 		return tex2->Evaluate(tspack, dg);
 	}
-	virtual void SetPower(float power, float area) {
-		// Update sub-textures
-		tex1->SetPower(power, area);
-		tex2->SetPower(power, area);
-	}
+	virtual float Y() const { return (tex1->Y() + tex2->Y()) / 2.f; }
 	virtual void SetIlluminant() {
 		// Update sub-textures
 		tex1->SetIlluminant();
@@ -190,11 +186,8 @@ public:
 		}
 		return value / filterSum;
 	}
-	virtual void SetPower(float power, float area) {
-		// Update sub-textures
-		tex1->SetPower(power, area);
-		tex2->SetPower(power, area);
-	}
+	virtual float Y() const { return (tex1->Y() + tex2->Y()) / 2.f; }
+	virtual float Filter() const { return (tex1->Filter() + tex2->Filter()) / 2.f; }
 	virtual void SetIlluminant() {
 		// Update sub-textures
 		tex1->SetIlluminant();

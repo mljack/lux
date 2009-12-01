@@ -61,10 +61,10 @@ void PathIntegrator::Preprocess(const TsPack *tspack, const Scene *scene)
 	bufferId = scene->camera->film->RequestBuffer(type, BUF_FRAMEBUFFER, "eye");
 }
 
-int PathIntegrator::Li(const TsPack *tspack, const Scene *scene,
+u_int PathIntegrator::Li(const TsPack *tspack, const Scene *scene,
 	const Sample *sample) const
 {
-	int nrContribs = 0;
+	u_int nrContribs = 0;
 	// Declare common path integration variables
 	RayDifferential r;
 	float rayWeight = tspack->camera->GenerateRay(*sample, &r);
@@ -88,14 +88,14 @@ int PathIntegrator::Li(const TsPack *tspack, const Scene *scene,
 	float alpha = 1.f;
 	float distance = INFINITY;
 	u_int through = 0;
-	for (int pathLength = 0; ; ++pathLength) {
+	for (u_int pathLength = 0; ; ++pathLength) {
 		// Find next vertex of path
 		Intersection isect;
 		if (!scene->Intersect(ray, &isect)) {
 			if (pathLength == 0) {
 				// Dade - now I know ray.maxt and I can call volumeIntegrator
 				SWCSpectrum Lv;
-				int g = scene->volumeIntegrator->Li(tspack, scene, ray, sample, &Lv, &alpha);
+				u_int g = scene->volumeIntegrator->Li(tspack, scene, ray, sample, &Lv, &alpha);
 				if (!Lv.Black()) {
 					L[g] = Lv;
 					V[g] += Lv.Filter(tspack) * VContrib;
@@ -132,7 +132,7 @@ int PathIntegrator::Li(const TsPack *tspack, const Scene *scene,
 		}
 
 		SWCSpectrum Lv;
-		int g = scene->volumeIntegrator->Li(tspack, scene, ray, sample, &Lv, &alpha);
+		u_int g = scene->volumeIntegrator->Li(tspack, scene, ray, sample, &Lv, &alpha);
 		if (!Lv.Black()) {
 			Lv *= pathThroughput;
 			L[g] += Lv;
@@ -245,7 +245,8 @@ int PathIntegrator::Li(const TsPack *tspack, const Scene *scene,
 		if (!L[i].Black())
 			V[i] /= L[i].Filter(tspack);
 		sample->AddContribution(sample->imageX, sample->imageY,
-			L[i].ToXYZ(tspack) * rayWeight, alpha, distance, V[i], bufferId, i);
+			XYZColor(tspack, L[i]) * rayWeight, alpha, distance,
+			V[i], bufferId, i);
 	}
 
 	return nrContribs;
@@ -278,7 +279,7 @@ SurfaceIntegrator* PathIntegrator::CreateSurfaceIntegrator(const ParamSet &param
 		rstrategy = RR_EFFICIENCY;
 	}
 	bool include_environment = params.FindOneBool("includeenvironment", true);
-	return new PathIntegrator(estrategy, rstrategy, maxDepth, RRcontinueProb, include_environment);
+	return new PathIntegrator(estrategy, rstrategy, max(maxDepth, 0), RRcontinueProb, include_environment);
 }
 
 static DynamicLoader::RegisterSurfaceIntegrator<PathIntegrator> r("path");
