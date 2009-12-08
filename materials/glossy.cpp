@@ -24,10 +24,12 @@
 
 // glossy.cpp*
 #include "glossy.h"
+#include "memory.h"
 #include "bxdf.h"
 #include "fresnelblend.h"
 #include "blinn.h"
 #include "anisotropic.h"
+#include "texture.h"
 #include "paramset.h"
 #include "dynload.h"
 
@@ -59,10 +61,10 @@ BSDF *Glossy::GetBSDF(const TsPack *tspack, const DifferentialGeometry &dgGeom, 
 
 	BxDF *bxdf;
 	if(u == v)
-		bxdf = BSDF_ALLOC(tspack, FresnelBlend)(d, s, a, ld, BSDF_ALLOC(tspack, Blinn)(1.f/u));
+		bxdf = ARENA_ALLOC(tspack->arena, FresnelBlend)(d, s, a, ld, ARENA_ALLOC(tspack->arena, Blinn)(1.f/u));
 	else
-		bxdf = BSDF_ALLOC(tspack, FresnelBlend)(d, s, a, ld, BSDF_ALLOC(tspack, Anisotropic)(1.f/u, 1.f/v));
-	SingleBSDF *bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dgs, dgGeom.nn, bxdf);
+		bxdf = ARENA_ALLOC(tspack->arena, FresnelBlend)(d, s, a, ld, ARENA_ALLOC(tspack->arena, Anisotropic)(1.f/u, 1.f/v));
+	SingleBSDF *bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dgs, dgGeom.nn, bxdf);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(compParams);
