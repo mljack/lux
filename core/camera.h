@@ -50,7 +50,8 @@ public:
 		warnOnce = true;
 		return false;
 	}
-	virtual bool GetSamplePosition(const Point &p, const Vector &wi, float distance, float *x, float *y) const { return false; }
+	virtual bool GetSamplePosition(const Point &p, const Vector &wi,
+		float distance, float *x, float *y) const { return false; }
 	virtual void ClampRay(Ray &ray) const { }
 	virtual bool IsDelta() const;
 	virtual bool IsLensBased() const { return true; }
@@ -79,7 +80,7 @@ public:
 	// ProjectiveCamera Public Methods
 	ProjectiveCamera(const Transform &world2cam,
 		const Transform &world2camEnd,
-	    const Transform &proj, const float Screen[4],
+		const Transform &proj, const float Screen[4],
 		float hither, float yon,
 		float sopen, float sclose, int sdist,
 		float lensr, float focald, Film *film);

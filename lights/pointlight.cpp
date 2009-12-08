@@ -21,7 +21,7 @@
  ***************************************************************************/
 
 // point.cpp*
-#include "point.h"
+#include "pointlight.h"
 #include "mc.h"
 #include "reflection/bxdf.h"
 #include "reflection/bxdf/lambertian.h"
@@ -37,10 +37,8 @@ public:
 	virtual ~GonioBxDF() { }
 	virtual void f(const TsPack *tspack, const Vector &wo, const Vector &wi, SWCSpectrum *const F) const {
 		// Transform to light coordinate system
-		const Vector wL(wi.x * x.x + wi.y * y.x + wi.z * z.x,
-				wi.x * x.y + wi.y * y.y + wi.z * z.y,
-				wi.x * x.z + wi.y * y.z + wi.z * z.z);
-		*F += SWCSpectrum(tspack, sf->f(wL));
+		const Vector wL(wi.x * x + wi.y * y + wi.z * z);
+		*F += SWCSpectrum(tspack, sf->f(wL)) * INV_PI;
 	}
 private:
 	Vector x, y, z; // s,t,n in the light coordinate system
@@ -64,8 +62,8 @@ PointLight::~PointLight() {
 	if(func)
 		delete func;
 }
-SWCSpectrum PointLight::Power(const TsPack *tspack, const Scene *) const {
-	return Lbase->Evaluate(tspack, dummydg) * gain * 4.f * M_PI * (func ? func->Average_f() : 1.f);
+float PointLight::Power(const Scene *) const {
+	return Lbase->Y() * gain * 4.f * M_PI * (func ? func->Average_f() : 1.f);
 }
 SWCSpectrum PointLight::Sample_L(const TsPack *tspack, const Point &P, float u1, float u2,
 		float u3, Vector *wo, float *pdf,
@@ -90,13 +88,13 @@ SWCSpectrum PointLight::Sample_L(const TsPack *tspack, const Scene *scene, float
 		return Lbase->Evaluate(tspack, dummydg) * gain;
 	}
 }
-float PointLight::Pdf(const Point &, const Vector &) const {
+float PointLight::Pdf(const TsPack *, const Point &, const Vector &) const {
 	return 0.;
 }
-float PointLight::Pdf(const Point &p, const Normal &n,
+float PointLight::Pdf(const TsPack *tspack, const Point &p, const Normal &n,
 	const Point &po, const Normal &ns) const
 {
-	return AbsDot(Normalize(p - po), ns) / DistanceSquared(p, po);
+	return 1.f;
 }
 SWCSpectrum PointLight::L(const TsPack *tspack, const Vector &w) const {
 	return Lbase->Evaluate(tspack, dummydg) * SWCSpectrum(tspack, gain * (func ? func->f(w) : 1.f));
@@ -117,12 +115,12 @@ bool PointLight::Sample_L(const TsPack *tspack, const Scene *scene, float u1, fl
 	const Normal ns(w);
 	DifferentialGeometry dg(lightPos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
 	if(func)
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
 	else
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, Lambertian)(1.f));
-	*Le = Lbase->Evaluate(tspack, dummydg) * gain;
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, Lambertian)(1.f));
+	*Le = Lbase->Evaluate(tspack, dummydg) * gain * M_PI;
 	return true;
 }
 bool PointLight::Sample_L(const TsPack *tspack, const Scene *scene, const Point &p, const Normal &n,
@@ -133,20 +131,20 @@ bool PointLight::Sample_L(const TsPack *tspack, const Scene *scene, const Point 
 	Normal ns = Normal(Normalize(w));
 	*pdfDirect = 1.f;
 	if(func)
-		*pdf = func->Pdf(WorldToLight(w));
+		*pdf = func->Pdf(Normalize(WorldToLight(w)));
 	else
 		*pdf = UniformSpherePdf();
 	Vector dpdu, dpdv;
 	CoordinateSystem(Vector(ns), &dpdu, &dpdv);
 	DifferentialGeometry dg(lightPos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
 	if(func)
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, GonioBxDF)(WorldToLight(ns), WorldToLight(dpdu), WorldToLight(dpdv), func));
 	else
-		*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-			BSDF_ALLOC(tspack, Lambertian)(1.f));
+		*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+			ARENA_ALLOC(tspack->arena, Lambertian)(1.f));
 	visibility->SetSegment(p, lightPos, tspack->time);
-	*Le = Lbase->Evaluate(tspack, dummydg) * gain;
+	*Le = Lbase->Evaluate(tspack, dummydg) * gain * M_PI;
 	return true;
 }
 SWCSpectrum PointLight::Le(const TsPack *tspack, const Scene *scene, const Ray &r,
