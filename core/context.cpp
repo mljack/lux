@@ -34,7 +34,8 @@
 #include "material.h"
 #include "stats.h"
 #include "renderfarm.h"
-#include "fleximage.h"
+#include "film/fleximage.h"
+#include "epsilon.h"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
@@ -137,14 +138,14 @@ void Context::removeServer(const string &n) {
 		renderFarm->stopFilmUpdater();
 }
 
-int Context::getServerCount() {
+u_int Context::getServerCount() {
 	if (!renderFarm)
 		return 0;
 
 	return renderFarm->getServerCount();
 }
 
-int Context::getRenderingServersStatus(RenderingServerInfo *info, int maxInfoCount) {
+u_int Context::getRenderingServersStatus(RenderingServerInfo *info, u_int maxInfoCount) {
 	if (!renderFarm)
 		return 0;
 
@@ -355,7 +356,7 @@ void Context::texture(const string &n, const string &type, const string &texname
 	renderFarm->send("luxTexture", n, type, texname, params);
 
 	TextureParams tp(params, params, graphicsState->floatTextures,
-			graphicsState->colorTextures);
+		graphicsState->colorTextures, graphicsState->fresnelTextures);
 	if (type == "float") {
 		// Create _float_ texture and store in _floatTextures_
 		if (graphicsState->floatTextures.find(n)
@@ -382,6 +383,19 @@ void Context::texture(const string &n, const string &type, const string &texname
 				curTransform, tp);
 		if (st)
 			graphicsState->colorTextures[n] = st;
+	} else if (type == "fresnel") {
+		// Create _fresnel_ texture and store in _fresnelTextures_
+		if (graphicsState->fresnelTextures.find(n)
+				!= graphicsState->fresnelTextures.end()) {
+			//Warning("Texture \"%s\" being redefined", n.c_str());
+			std::stringstream ss;
+			ss<<"Texture '"<<n<<"' being redefined.";
+			luxError(LUX_SYNTAX,LUX_WARNING,ss.str().c_str());
+		}
+		boost::shared_ptr<Texture<ConcreteFresnel> > st = MakeFresnelTexture(texname,
+				curTransform, tp);
+		if (st)
+			graphicsState->fresnelTextures[n] = st;
 	} else {
 		//Error("Texture type \"%s\" unknown.", type.c_str());
 		std::stringstream ss;
@@ -447,7 +461,8 @@ void Context::lightSource(const string &n, const ParamSet &params) {
 	renderFarm->send("luxLightSource", n, params);
 
 	TextureParams tp(params, graphicsState->materialParams,
-			graphicsState->floatTextures, graphicsState->colorTextures);
+		graphicsState->floatTextures, graphicsState->colorTextures,
+		graphicsState->fresnelTextures);
 	u_int lg = GetActiveLightGroup();
 
 	if (n == "sunsky") {
@@ -526,7 +541,8 @@ void Context::portalShape(const string &n, const ParamSet &params) {
 boost::shared_ptr<Material> Context::makematerial(const ParamSet& shapeparams, bool force) {
 	// Create base material
 	TextureParams mp(shapeparams, graphicsState->materialParams,
-		graphicsState->floatTextures, graphicsState->colorTextures);
+		graphicsState->floatTextures, graphicsState->colorTextures,
+		graphicsState->fresnelTextures);
 	boost::shared_ptr<Material> mtl = MakeMaterial(graphicsState->material, curTransform, mp);
 	if (!mtl && force) {
 		mtl = MakeMaterial("matte", curTransform, mp);
@@ -551,7 +567,9 @@ void Context::makemixmaterial(const ParamSet& shapeparams, const ParamSet& mater
 			ParamSet nparams = namedmaterials[i].materialParams;
 			nparams.EraseString("type");
 			TextureParams mp1(shapeparams, nparams,
-				graphicsState->floatTextures, graphicsState->colorTextures);
+				graphicsState->floatTextures,
+				graphicsState->colorTextures,
+				graphicsState->fresnelTextures);
 			boost::shared_ptr<Material> mtl1 = MakeMaterial(type, curTransform, mp1);
 
 			if(type == "mix")
@@ -575,7 +593,9 @@ void Context::makemixmaterial(const ParamSet& shapeparams, const ParamSet& mater
 			ParamSet nparams = namedmaterials[i].materialParams;
 			nparams.EraseString("type");
 			TextureParams mp1(shapeparams, nparams,
-				graphicsState->floatTextures, graphicsState->colorTextures);
+				graphicsState->floatTextures,
+				graphicsState->colorTextures,
+				graphicsState->fresnelTextures);
 			boost::shared_ptr<Material> mtl2 = MakeMaterial(type, curTransform, mp1);
 
 			if(type == "mix")
@@ -608,7 +628,9 @@ void Context::shape(const string &n, const ParamSet &params) {
 	AreaLight *area= NULL;
 	if (graphicsState->areaLight != "") {
 		TextureParams amp(params, graphicsState->areaLightParams,
-			graphicsState->floatTextures, graphicsState->colorTextures);
+			graphicsState->floatTextures,
+			graphicsState->colorTextures,
+			graphicsState->fresnelTextures);
 		u_int lg = GetActiveLightGroup();
 		area = MakeAreaLight(graphicsState->areaLight, curTransform,
 				graphicsState->areaLightParams, amp, sh);
@@ -694,8 +716,7 @@ void Context::objectInstance(const string &n) {
 	}
 	if (in.size() > 1 || !in[0]->CanIntersect()) {
 		// Refine instance _Primitive_s and create aggregate
-		boost::shared_ptr<Primitive> accel(MakeAccelerator(
-				renderOptions->AcceleratorName, in,
+		boost::shared_ptr<Primitive> accel(MakeAccelerator(renderOptions->AcceleratorName, in,
 				renderOptions->AcceleratorParams));
 		if (!accel)
 			accel = boost::shared_ptr<Primitive>(MakeAccelerator("kdtree", in, ParamSet()));
@@ -738,8 +759,7 @@ void Context::motionInstance(const string &n, float startTime, float endTime, co
 	}
 	if (in.size() > 1 || !in[0]->CanIntersect()) {
 		// Refine instance _Primitive_s and create aggregate
-		boost::shared_ptr<Primitive> accel(MakeAccelerator(
-						renderOptions->AcceleratorName, in,
+		boost::shared_ptr<Primitive> accel(MakeAccelerator(renderOptions->AcceleratorName, in,
 						renderOptions->AcceleratorParams));
 		if (!accel)
 			accel = boost::shared_ptr<Primitive>(MakeAccelerator("kdtree", in, ParamSet()));
@@ -858,6 +878,7 @@ Scene *Context::RenderOptions::MakeScene() const {
 		luxError(LUX_BUG,LUX_SEVERE,"Unable to create scene due to missing plug-ins");
 		return NULL;
 	}
+
 	Scene *ret = new Scene(camera,
 			surfaceIntegrator, volumeIntegrator,
 			sampler, accelerator, lights, lightGroups, volumeRegion);
@@ -922,9 +943,9 @@ void Context::pause() {
 
 void Context::setHaltSamplePerPixel(int haltspp, bool haveEnoughSamplePerPixel,
 		bool suspendThreadsWhenDone) {
-	FlexImageFilm *fif = (FlexImageFilm *)luxCurrentScene->camera->film;
-	fif->haltSamplePerPixel = haltspp;
-	fif->enoughSamplePerPixel = haveEnoughSamplePerPixel;
+	Film *film = luxCurrentScene->camera->film;
+	film->haltSamplePerPixel = haltspp;
+	film->enoughSamplePerPixel = haveEnoughSamplePerPixel;
 	luxCurrentScene->suspendThreadsWhenDone = suspendThreadsWhenDone;
 }
 
@@ -955,19 +976,19 @@ void Context::exit() {
 }
 
 //controlling number of threads
-int Context::addThread() {
-	return luxCurrentScene->AddThread();
+u_int Context::addThread() {
+	return luxCurrentScene->CreateRenderThread();
 }
 
 void Context::removeThread() {
-	luxCurrentScene->RemoveThread();
+	luxCurrentScene->RemoveRenderThread();
 }
 
-int Context::getRenderingThreadsStatus(RenderingThreadInfo *info, int maxInfoCount) {
+u_int Context::getRenderingThreadsStatus(RenderingThreadInfo *info, u_int maxInfoCount) {
 	if (!luxCurrentScene)
 		return 0;
 
-	return luxCurrentScene->getThreadsStatus(info, maxInfoCount);
+	return luxCurrentScene->GetThreadsStatus(info, maxInfoCount);
 }
 
 //framebuffer access
@@ -980,27 +1001,27 @@ unsigned char* Context::framebuffer() {
 }
 
 //histogram access
-void Context::getHistogramImage(unsigned char *outPixels, int width, int height, int options){
-	luxCurrentScene->getHistogramImage(outPixels, width, height, options);
+void Context::getHistogramImage(unsigned char *outPixels, u_int width, u_int height, int options){
+	luxCurrentScene->GetHistogramImage(outPixels, width, height, options);
 }
 
 // Parameter Access functions
-void Context::SetParameterValue(luxComponent comp, luxComponentParameters param, double value, int index) { 
+void Context::SetParameterValue(luxComponent comp, luxComponentParameters param, double value, u_int index) { 
 	luxCurrentScene->SetParameterValue(comp, param, value, index);
 }
-double Context::GetParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+double Context::GetParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 	return luxCurrentScene->GetParameterValue(comp, param, index);
 }
-double Context::GetDefaultParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+double Context::GetDefaultParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 	return luxCurrentScene->GetDefaultParameterValue(comp, param, index);
 }
-void Context::SetStringParameterValue(luxComponent comp, luxComponentParameters param, const string& value, int index) { 
+void Context::SetStringParameterValue(luxComponent comp, luxComponentParameters param, const string& value, u_int index) { 
 	return luxCurrentScene->SetStringParameterValue(comp, param, value, index);
 }
-string Context::GetStringParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+string Context::GetStringParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 	return luxCurrentScene->GetStringParameterValue(comp, param, index);
 }
-string Context::GetDefaultStringParameterValue(luxComponent comp, luxComponentParameters param, int index) {
+string Context::GetDefaultStringParameterValue(luxComponent comp, luxComponentParameters param, u_int index) {
 	return luxCurrentScene->GetDefaultStringParameterValue(comp, param, index);
 }
 

@@ -46,7 +46,7 @@ public:
 	SpotBxDF(float width, float fall) : BxDF(BxDFType(BSDF_REFLECTION | BSDF_DIFFUSE)), cosTotalWidth(width), cosFalloffStart(fall) {}
 	virtual ~SpotBxDF() { }
 	virtual void f(const TsPack *tspack, const Vector &wo, const Vector &wi, SWCSpectrum *const f) const {
-		*f += LocalFalloff(wi, cosTotalWidth, cosFalloffStart);
+		*f += LocalFalloff(wi, cosTotalWidth, cosFalloffStart) / fabsf(wo.z);
 	}
 	virtual bool Sample_f(const TsPack *tspack, const Vector &wo, Vector *wi, float u1, float u2, SWCSpectrum *const f,float *pdf, float *pdfBack = NULL, bool reverse = false) const
 	{
@@ -54,7 +54,7 @@ public:
 		*pdf = UniformConePdf(cosTotalWidth);
 		if (pdfBack)
 			*pdfBack = Pdf(tspack, *wi, wo);
-		*f = LocalFalloff(*wi, cosTotalWidth, cosFalloffStart);
+		*f = LocalFalloff(*wi, cosTotalWidth, cosFalloffStart) / fabsf(wi->z);
 		return true;
 	}
 	virtual float Pdf(const TsPack *tspack, const Vector &wi, const Vector &wo) const
@@ -94,10 +94,10 @@ SWCSpectrum SpotLight::Sample_L(const TsPack *tspack, const Point &p, float u1, 
 	return Lbase->Evaluate(tspack, dummydg) * gain * Falloff(-*wi) /
 		DistanceSquared(lightPos, p);
 }
-float SpotLight::Pdf(const Point &, const Vector &) const {
+float SpotLight::Pdf(const TsPack *tspack, const Point &, const Vector &) const {
 	return 0.;
 }
-float SpotLight::Pdf(const Point &p, const Normal &n,
+float SpotLight::Pdf(const TsPack *tspack, const Point &p, const Normal &n,
 	const Point &po, const Normal &ns) const
 {
 	return AbsDot(Normalize(p - po), ns) / DistanceSquared(p, po);
@@ -117,8 +117,8 @@ bool SpotLight::Sample_L(const TsPack *tspack, const Scene *scene, float u1, flo
 	Vector dpdu, dpdv;
 	CoordinateSystem(Vector(ns), &dpdu, &dpdv);
 	DifferentialGeometry dg(lightPos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-		BSDF_ALLOC(tspack, SpotBxDF)(cosTotalWidth, cosFalloffStart));
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+		ARENA_ALLOC(tspack->arena, SpotBxDF)(cosTotalWidth, cosFalloffStart));
 	*pdf = 1.f;
 	*Le = Lbase->Evaluate(tspack, dummydg) * gain;
 	return true;
@@ -134,8 +134,8 @@ bool SpotLight::Sample_L(const TsPack *tspack, const Scene *scene, const Point &
 	Vector dpdu, dpdv;
 	CoordinateSystem(Vector(ns), &dpdu, &dpdv);
 	DifferentialGeometry dg(lightPos, ns, dpdu, dpdv, Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, ns,
-		BSDF_ALLOC(tspack, SpotBxDF)(cosTotalWidth, cosFalloffStart));
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, ns,
+		ARENA_ALLOC(tspack->arena, SpotBxDF)(cosTotalWidth, cosFalloffStart));
 	visibility->SetSegment(p, lightPos, tspack->time);
 	*Le = Lbase->Evaluate(tspack, dummydg) * gain;
 	return true;

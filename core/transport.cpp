@@ -37,8 +37,8 @@ Integrator::~Integrator() {
 SWCSpectrum UniformSampleAllLights(const TsPack *tspack, const Scene *scene,
 	const Point &p, const Normal &n, const Vector &wo, BSDF *bsdf,
 	const Sample *sample,
-	float *lightSample, float *lightNum,
-	float *bsdfSample, float *bsdfComponent)
+	const float *lightSample, const float *lightNum,
+	const float *bsdfSample, const float *bsdfComponent)
 {
 	SWCSpectrum L(0.f);
 	for (u_int i = 0; i < scene->lights.size(); ++i) {
@@ -49,27 +49,25 @@ SWCSpectrum UniformSampleAllLights(const TsPack *tspack, const Scene *scene,
 	return L;
 }
 
-int UniformSampleOneLight(const TsPack *tspack, const Scene *scene,
+u_int UniformSampleOneLight(const TsPack *tspack, const Scene *scene,
 	const Point &p, const Normal &n, const Vector &wo, BSDF *bsdf,
 	const Sample *sample,
-	float *lightSample, float *lightNum,
-	float *bsdfSample, float *bsdfComponent, SWCSpectrum *L)
+	const float *lightSample, const float *lightNum,
+	const float *bsdfSample, const float *bsdfComponent, SWCSpectrum *L)
 {
 	// Randomly choose a single light to sample, _light_
-	int nLights = scene->lights.size();
+	u_int nLights = scene->lights.size();
 	if (nLights == 0) {
 		*L = 0.f;
 		return 0;
 	}
-	int lightNumber;
 	float ls3 = *lightNum * nLights;
-	lightNumber = min(Floor2Int(ls3), nLights - 1);
+	const u_int lightNumber = min(Floor2UInt(ls3), nLights - 1);
 	ls3 -= lightNumber;
 	Light *light = scene->lights[lightNumber];
-	*L = (float)nLights *
-		EstimateDirect(tspack, scene, light, p, n, wo, bsdf,
-			sample, lightSample[0], lightSample[1], ls3,
-			bsdfSample[0], bsdfSample[1], *bsdfComponent);
+	*L = static_cast<float>(nLights) * EstimateDirect(tspack, scene, light,
+		p, n, wo, bsdf, sample, lightSample[0], lightSample[1], ls3,
+		bsdfSample[0], bsdfSample[1], *bsdfComponent);
 	return scene->lights[lightNumber]->group;
 }
 
@@ -139,9 +137,9 @@ SWCSpectrum WeightedSampleOneLight(const TsPack *tspack, const Scene *scene,
 
 SWCSpectrum EstimateDirect(const TsPack *tspack, const Scene *scene, const Light *light,
 	const Point &p, const Normal &n, const Vector &wo, BSDF *bsdf, const Sample *sample, 
-	float &ls1, float &ls2, float &ls3, float &bs1, float &bs2, float &bcs)
+	float ls1, float ls2, float ls3, float bs1, float bs2, float bcs)
 {
-	SWCSpectrum Ld(0.);
+	SWCSpectrum Ld(0.f);
 
 	// Dade - use MIS only if it is worth doing
 	BxDFType noDiffuse = BxDFType(BSDF_ALL & ~(BSDF_DIFFUSE));
@@ -153,7 +151,7 @@ SWCSpectrum EstimateDirect(const TsPack *tspack, const Scene *scene, const Light
 		VisibilityTester visibility;
 		SWCSpectrum Li = light->Sample_L(tspack, p, n,
 			ls1, ls2, ls3, &wi, &lightPdf, &visibility);
-		if (lightPdf > 0. && !Li.Black()) {
+		if (lightPdf > 0.f && !Li.Black()) {
 			SWCSpectrum f = bsdf->f(tspack, wi, wo);
 			SWCSpectrum fO(1.f);
 			if (!f.Black() && visibility.TestOcclusion(tspack, scene, &fO)) {
@@ -172,7 +170,7 @@ SWCSpectrum EstimateDirect(const TsPack *tspack, const Scene *scene, const Light
 		VisibilityTester visibility;
 		SWCSpectrum Li = light->Sample_L(tspack, p, n,
 			ls1, ls2, ls3, &wi, &lightPdf, &visibility);
-		if (lightPdf > 0. && !Li.Black()) {
+		if (lightPdf > 0.f && !Li.Black()) {
 			SWCSpectrum f = bsdf->f(tspack, wi, wo, noSpecular);
 			SWCSpectrum fO(1.f);
 			if (!f.Black() && visibility.TestOcclusion(tspack, scene, &fO)) {
@@ -188,7 +186,7 @@ SWCSpectrum EstimateDirect(const TsPack *tspack, const Scene *scene, const Light
 			// Sample BSDF with multiple importance sampling
 			SWCSpectrum fBSDF;
 			if (bsdf->Sample_f(tspack, wo, &wi,	bs1, bs2, bcs, &fBSDF, &bsdfPdf, noSpecular, NULL, NULL, true)) {
-				lightPdf = light->Pdf(p, n, wi);
+				lightPdf = light->Pdf(tspack, p, n, wi);
 				if (lightPdf > 0.) {
 					// Add light contribution from BSDF sampling
 					float weight = PowerHeuristic(1, bsdfPdf, 1, lightPdf);
@@ -197,6 +195,11 @@ SWCSpectrum EstimateDirect(const TsPack *tspack, const Scene *scene, const Light
 					RayDifferential ray(p, wi);
 					ray.time = tspack->time;
 					const BxDFType flags(BxDFType(BSDF_SPECULAR | BSDF_TRANSMISSION));
+					// The for loop prevents an infinite
+					// loop when the ray is almost parallel
+					// to the surface
+					// It should much less frequent with
+					// dynamic epsilon, but it's safer
 					for (u_int i = 0; i < 10000; ++i) {
 						if (!scene->Intersect(ray, &lightIsect)) {
 							Li *= light->Le(tspack, ray);
