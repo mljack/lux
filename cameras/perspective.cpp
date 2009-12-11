@@ -30,13 +30,14 @@
 #include "light.h"
 #include "paramset.h"
 #include "dynload.h"
-#include "disk.h"
+#include "shapes/disk.h"
 #include "error.h"
+#include "epsilon.h"
 
 using namespace lux;
 
-#define honeyRad 0.866025403
-#define radIndex 57.2957795
+#define honeyRad 0.866025403f
+#define radIndex 57.2957795f
 
 class PerspectiveBxDF : public BxDF
 {
@@ -135,7 +136,7 @@ PerspectiveCamera::
 		posPdf = 1.f;
 
 	R = 1.f;
-	float templength = R * tan(fov / 2.f) * 2.f;	
+	float templength = R * tanf(fov / 2.f) * 2.f;	
 	int xS, xE, yS, yE;
 	f->GetSampleExtent(&xS, &xE, &yS, &yE);
 	xStart = xS;
@@ -247,8 +248,8 @@ bool PerspectiveCamera::Sample_W(const TsPack *tspack, const Scene *scene, float
 	}
 	Point ps = CameraToWorld(psC);
 	DifferentialGeometry dg(ps, normal, CameraToWorld(Vector(1, 0, 0)), CameraToWorld(Vector(0, 1, 0)), Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, normal,
-		BSDF_ALLOC(tspack, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, normal,
+		ARENA_ALLOC(tspack->arena, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
 		fov, Apixel, psC, RasterToCameraBidir,
 		xStart, xEnd, yStart, yEnd));
 	*pdf = posPdf;
@@ -265,8 +266,8 @@ bool PerspectiveCamera::Sample_W(const TsPack *tspack, const Scene *scene, const
 	}
 	Point ps = CameraToWorld(psC);
 	DifferentialGeometry dg(ps, normal, CameraToWorld(Vector(1, 0, 0)), CameraToWorld(Vector(0, 1, 0)), Normal(0, 0, 0), Normal(0, 0, 0), 0, 0, NULL);
-	*bsdf = BSDF_ALLOC(tspack, SingleBSDF)(dg, normal,
-		BSDF_ALLOC(tspack, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
+	*bsdf = ARENA_ALLOC(tspack->arena, SingleBSDF)(dg, normal,
+		ARENA_ALLOC(tspack->arena, PerspectiveBxDF)(LensRadius > 0.f, FocalDistance,
 		fov, Apixel, psC, RasterToCameraBidir,
 		xStart, xEnd, yStart, yEnd));
 	*pdf = posPdf;
@@ -285,11 +286,12 @@ BBox PerspectiveCamera::Bounds() const
 	return bound;
 }
 
-bool PerspectiveCamera::GetSamplePosition(const Point &p, const Vector &wi, float distance, float *x, float *y) const
+bool PerspectiveCamera::GetSamplePosition(const Point &p, const Vector &wi,
+	float distance, float *x, float *y) const
 {
 	Vector direction(normal);
 	const float cosi = Dot(wi, direction);
-	if (cosi <= 0.f || (distance != -1.f && (distance * cosi < ClipHither || distance * cosi > ClipYon)))
+	if (cosi <= 0.f || (!isinf(distance) && (distance * cosi < ClipHither || distance * cosi > ClipYon)))
 		return false;
 	if (LensRadius > 0.f) {
 		Point pFC(p + wi * (FocalDistance / Dot(wi, direction)));
@@ -324,15 +326,15 @@ void PerspectiveCamera::SampleLens(float u1, float u2, float *dx, float *dy) con
 	static const float index = subDiv / radIndex;
 	static const float honeyRadius = cosf(index);
 
-	int temp = rand() % (shape * 2); //FIXME don't use rand()
+	int temp = min(Floor2Int(2.f * shape * u2), 2 * shape - 1);
 
 	float theta;
 	if (shape == 3 && temp % 2 == 0)
-		theta = 2.f * M_PI * (temp + sqrtf(u2)) / (shape * 2);
+		theta = 2.f * M_PI * (temp + sqrtf(2.f * shape * u2 - temp)) / (shape * 2);
 	else
-		theta = 2.f * M_PI * (temp + u2) / (shape * 2);
+		theta = 2.f * M_PI * u2;
 
-	const int sector = theta / index;
+	const int sector = Floor2Int(theta / index);
 	const float rho = (sector % 2 == 0) ? theta - sector * index :
 		(sector - 1) * index - theta;
 
@@ -399,7 +401,7 @@ Camera* PerspectiveCamera::CreateCamera(const Transform &world2camStart, const T
 		screen[2] = -1.f / frame;
 		screen[3] =  1.f / frame;
 	}
-	int swi;
+	u_int swi;
 	const float *sw = params.FindFloat("screenwindow", &swi);
 	if (sw && swi == 4)
 		memcpy(screen, sw, 4*sizeof(float));
