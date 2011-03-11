@@ -104,7 +104,7 @@ void KdTree::RefreshMutex() {
 	maxDistSquared = 0.f;
 	for (unsigned int i = 0; i < nNodes; ++i)  {
 		buildNodes.push_back(hitPoints->GetHitPoint(i));
-		maxDistSquared = luxrays::Max(maxDistSquared, buildNodes[i]->accumPhotonRadius2);
+		maxDistSquared = max<float>(maxDistSquared, buildNodes[i]->accumPhotonRadius2);
 	}
 	LOG(LUX_INFO, LUX_NOERROR) << "kD-Tree search radius: " << sqrtf(maxDistSquared);
 
@@ -113,7 +113,7 @@ void KdTree::RefreshMutex() {
 }
 
 void KdTree::AddFlux(const Point &p, const Vector &wi,
-		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux) {
+		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux, const u_int light_group) {
 	unsigned int nodeNumStack[64];
 	// Start from the first node
 	nodeNumStack[0] = 0;
@@ -142,18 +142,6 @@ void KdTree::AddFlux(const Point &p, const Vector &wi,
 
 		// Process the leaf
 		HitPoint *hp = nodeData[nodeNum];
-		const float dist2 = DistanceSquared(hp->position, p);
-		if (dist2 > hp->accumPhotonRadius2)
-			continue;
-
-		const float dot = Dot(hp->normal, wi);
-		if (dot <= 0.0001f)
-			continue;
-
-		luxrays::AtomicInc(&hp->accumPhotonCount);
-		SWCSpectrum flux = photonFlux *
-			hp->bsdf->F(sw, wi, hp->wo, true) *
-			hp->throughput; // FIXME - not sure if the reverse flag should be true or false
-		SpectrumAtomicAdd(hp->accumReflectedFlux, flux);
+		AddFluxToHitPoint(hp, p, wi, sw, photonFlux, light_group);
 	}
 }

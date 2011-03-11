@@ -25,46 +25,12 @@
 #include "lux.h"
 #include "scene.h"
 #include "sampling.h"
-
-#include "luxrays/luxrays.h"
-#include "luxrays/core/device.h"
-#include "luxrays/core/intersectiondevice.h"
+#include "pixelsamplers/linear.h"
 
 #include "lookupaccel.h"
 
 namespace lux
 {
-
-enum EyePathStateType {
-	NEXT_VERTEX, DIRECT_LIGHT_SAMPLING
-};
-
-class EyePath {
-public:
-	EyePath(const Scene &scene, RandomGenerator *rng, const u_int index);
-	~EyePath();
-
-	EyePathStateType state;
-
-	Sample sample;
-
-	// Screen information
-	u_int pixelIndex;
-
-	// Eye path information
-	Ray ray;
-	u_int depth;
-
-	SWCSpectrum throughput;
-};
-
-class PhotonPath {
-public:
-	// The ray is stored in the RayBuffer and the index is implicitly stored
-	// in the array of PhotonPath
-	SWCSpectrum flux;
-	u_int depth;
-};
 
 //------------------------------------------------------------------------------
 // Eye path hit points
@@ -74,45 +40,52 @@ enum HitPointType {
 	SURFACE, CONSTANT_COLOR
 };
 
-class HitPoint {
-public:
-	HitPointType type;
-
-	// Used for CONSTANT_COLOR and SURFACE type
-	SWCSpectrum throughput;
-
-	// Used for SURFACE type
-	Point position;
-	Vector wo;
-	Normal normal;
-	BSDF *bsdf;
-
+struct HitPointLightGroup {
 	unsigned long long photonCount;
-	SWCSpectrum reflectedFlux;
+	XYZColor reflectedFlux;
 
-	float accumPhotonRadius2;
 	u_int accumPhotonCount;
-	SWCSpectrum accumReflectedFlux;
-	// Used only for direct light sampling
-	SWCSpectrum accumDirectLightRadiance;
-
-	SWCSpectrum accumRadiance;
+	XYZColor accumReflectedFlux;
+	XYZColor accumRadiance;
 
 	u_int constantHitsCount;
 	u_int surfaceHitsCount;
 
-	SWCSpectrum radiance;
+	XYZColor radiance;
+	// Radiance Sum Square Error, used to compute Mean Square Error
+	float radianceSSE;
+
+	XYZColor eyeRadiance;
 };
 
-/*extern bool GetHitPointInformation(const Scene *scene, RandomGenerator *rndGen,
-		Ray *ray, const RayHit *rayHit, Point &hitPoint,
-		SWCSpectrum &surfaceColor, Normal &N, Normal &shadeN);*/
 
-class HybridSPPMRenderer;
+class HitPoint {
+public:
+	HitPointType type;
+	Sample *sample;
+	PermutedHalton *halton;
+	float haltonOffset;
+
+	// Eye path data
+	SWCSpectrum eyeThroughput; // Used only for SURFACE type
+	float eyeAlpha;
+	float eyeDistance;
+
+	// Used for SURFACE type
+	Point position;
+	Vector wo;
+	BSDF *bsdf;
+
+	vector<HitPointLightGroup> lightGroupData;
+	
+	float accumPhotonRadius2;
+};
+
+class SPPMRenderer;
 
 class HitPoints {
 public:
-	HitPoints(HybridSPPMRenderer *engine);
+	HitPoints(SPPMRenderer *engine, RandomGenerator *rng);
 	~HitPoints();
 
 	void Init();
@@ -136,15 +109,14 @@ public:
 	void IncPass() { ++pass; }
 
 	void AddFlux(const Point &hitPoint, const Vector &wi,
-		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux) {
-		lookUpAccel->AddFlux(hitPoint, wi, sw, photonFlux);
+		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux, const u_int light_group) {
+		lookUpAccel->AddFlux(hitPoint, wi, sw, photonFlux, light_group);
 	}
 
-	void AccumulateFlux(const unsigned long long photonTraced,
-			const u_int index, const u_int count);
-	void SetHitPoints(RandomGenerator *rndGen,
-			luxrays::IntersectionDevice *device, luxrays::RayBuffer *rayBuffer,
-			const u_int index, const u_int count);
+	void AccumulateFlux(const vector<unsigned long long> &photonTracedByLightGroup,
+		const u_int index, const u_int count);
+	void SetHitPoints(RandomGenerator *rng, const u_int pass,
+		const u_int index, const u_int count);
 
 	void RefreshAccelMutex() {
 		lookUpAccel->RefreshMutex();
@@ -154,11 +126,17 @@ public:
 		lookUpAccel->RefreshParallel(index, count);
 	}
 
+	void UpdateFilm();
+
 private:
-	HybridSPPMRenderer *renderer;
+	void TraceEyePath(HitPoint *hp, const Sample &sample, const float *u);
+
+	SPPMRenderer *renderer;
+	PixelSampler *pixelSampler;
 
 	// Hit points information
 	BBox bbox;
+	float initialPhotonRaidus;
 	float maxPhotonRaidus2;
 	std::vector<HitPoint> *hitPoints;
 	HitPointsLookUpAccel *lookUpAccel;
