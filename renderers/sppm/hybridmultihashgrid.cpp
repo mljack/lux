@@ -25,7 +25,7 @@
 
 using namespace lux;
 
-HybridHashGrid::HybridHashGrid(HitPoints *hps) {
+HybridMultiHashGrid::HybridMultiHashGrid(HitPoints *hps) {
 	hitPoints = hps;
 	grid = NULL;
 	kdtreeThreshold = 2;
@@ -33,28 +33,28 @@ HybridHashGrid::HybridHashGrid(HitPoints *hps) {
 	RefreshMutex();
 }
 
-HybridHashGrid::~HybridHashGrid() {
+HybridMultiHashGrid::~HybridMultiHashGrid() {
 	for (unsigned int i = 0; i < gridSize; ++i)
 		delete grid[i];
 	delete[] grid;
 }
 
-void HybridHashGrid::RefreshMutex() {
+void HybridMultiHashGrid::RefreshMutex() {
 	const unsigned int hitPointsCount = hitPoints->GetSize();
 	const BBox &hpBBox = hitPoints->GetBBox();
 
 	// Calculate the size of the grid cell
 	const float maxPhotonRadius2 = hitPoints->GetMaxPhotonRaidus2();
 	const float cellSize = sqrtf(maxPhotonRadius2) * 2.f;
-	LOG(LUX_INFO, LUX_NOERROR) << "Hybrid hash grid cell size: " << cellSize;
+	LOG(LUX_INFO, LUX_NOERROR) << "Hybrid multi-hash grid cell size: " << cellSize;
 	invCellSize = 1.f / cellSize;
 	maxHashIndexX = int((hpBBox.pMax.x - hpBBox.pMin.x) * invCellSize);
 	maxHashIndexY = int((hpBBox.pMax.y - hpBBox.pMin.y) * invCellSize);
 	maxHashIndexZ = int((hpBBox.pMax.z - hpBBox.pMin.z) * invCellSize);
-	LOG(LUX_INFO, LUX_NOERROR) << "Hybrid hash grid cell count: (" << maxHashIndexX << ", " <<
+	LOG(LUX_INFO, LUX_NOERROR) << "Hybrid multi-hash grid cell count: (" << maxHashIndexX << ", " <<
 			maxHashIndexY << ", " << maxHashIndexZ << ")";
 
-	// TODO: add a tunable parameter for HybridHashGrid size
+	// TODO: add a tunable parameter for HybridMultiHashGrid size
 	gridSize = hitPointsCount;
 	if (!grid) {
 		grid = new HashCell*[gridSize];
@@ -68,17 +68,10 @@ void HybridHashGrid::RefreshMutex() {
 		}
 	}
 
-	LOG(LUX_INFO, LUX_NOERROR) << "Building hit points hybrid hash grid:";
-	LOG(LUX_INFO, LUX_NOERROR) << "  0k/" << hitPointsCount / 1000 << "k";
+	LOG(LUX_INFO, LUX_NOERROR) << "Building hit points hybrid multi-hash grid";
 	unsigned int maxPathCount = 0;
-	double lastPrintTime = luxrays::WallClockTime();
 	unsigned long long entryCount = 0;
 	for (unsigned int i = 0; i < hitPointsCount; ++i) {
-		if (luxrays::WallClockTime() - lastPrintTime > 2.0) {
-			LOG(LUX_INFO, LUX_NOERROR) << "  " << i / 1000 << "k/" << hitPointsCount / 1000 << "k";
-			lastPrintTime = luxrays::WallClockTime();
-		}
-
 		HitPoint *hp = hitPoints->GetHitPoint(i);
 
 		if (hp->type == SURFACE) {
@@ -87,37 +80,52 @@ void HybridHashGrid::RefreshMutex() {
 			const Vector bMin = ((hp->position - rad) - hpBBox.pMin) * invCellSize;
 			const Vector bMax = ((hp->position + rad) - hpBBox.pMin) * invCellSize;
 
-			const int ixMin = luxrays::Clamp<int>(int(bMin.x), 0, maxHashIndexX);
-			const int ixMax = luxrays::Clamp<int>(int(bMax.x), 0, maxHashIndexX);
-			const int iyMin = luxrays::Clamp<int>(int(bMin.y), 0, maxHashIndexY);
-			const int iyMax = luxrays::Clamp<int>(int(bMax.y), 0, maxHashIndexY);
-			const int izMin = luxrays::Clamp<int>(int(bMin.z), 0, maxHashIndexZ);
-			const int izMax = luxrays::Clamp<int>(int(bMax.z), 0, maxHashIndexZ);
+			const int ixMin = Clamp<int>(int(bMin.x), 0, maxHashIndexX);
+			const int ixMax = Clamp<int>(int(bMax.x), 0, maxHashIndexX);
+			const int iyMin = Clamp<int>(int(bMin.y), 0, maxHashIndexY);
+			const int iyMax = Clamp<int>(int(bMax.y), 0, maxHashIndexY);
+			const int izMin = Clamp<int>(int(bMin.z), 0, maxHashIndexZ);
+			const int izMax = Clamp<int>(int(bMax.z), 0, maxHashIndexZ);
 
 			for (int iz = izMin; iz <= izMax; iz++) {
 				for (int iy = iyMin; iy <= iyMax; iy++) {
 					for (int ix = ixMin; ix <= ixMax; ix++) {
-						int hv = Hash(ix, iy, iz);
+						int hv = Hash1(ix, iy, iz);
+						HashCell *hc = grid[hv];
 
-						if (grid[hv] == NULL)
-							grid[hv] = new HashCell(LIST);
+						if (hc == NULL)
+							hc = grid[hv] = new HashCell(LIST);
+						else {
+							hv = Hash2(ix, iy, iz);
+							hc = grid[hv];
 
-						grid[hv]->AddList(hp);
+							if (hc == NULL)
+								hc = grid[hv] = new HashCell(LIST);
+							/*else {
+								hv = Hash3(ix, iy, iz);
+								hc = grid[hv];
+
+								if (hc == NULL)
+									hc = grid[hv] = new HashCell(LIST);
+							}*/
+						}
+
+						hc->AddList(hp);
 						++entryCount;
 
-						if (grid[hv]->GetSize() > maxPathCount)
-							maxPathCount = grid[hv]->GetSize();
+						if (hc->GetSize() > maxPathCount)
+							maxPathCount = hc->GetSize();
 					}
 				}
 			}
 		}
 	}
-	LOG(LUX_INFO, LUX_NOERROR) << "Max. hit points in a single hybrid hash grid entry: " << maxPathCount;
-	LOG(LUX_INFO, LUX_NOERROR) << "Total hash grid entry: " << entryCount;
-	LOG(LUX_INFO, LUX_NOERROR) << "Avg. hit points in a single hybrid hash grid entry: " << entryCount / gridSize;
+	LOG(LUX_INFO, LUX_NOERROR) << "Max. hit points in a single hybrid multi-hash grid entry: " << maxPathCount;
+	LOG(LUX_INFO, LUX_NOERROR) << "Total multihash grid entry: " << entryCount;
+	LOG(LUX_INFO, LUX_NOERROR) << "Avg. hit points in a single hybrid multi-hash grid entry: " << entryCount / gridSize;
 
-	// Debug code
-	/*unsigned int nullCount = 0;
+	/*// Debug code
+	unsigned int nullCount = 0;
 	for (unsigned int i = 0; i < gridSize; ++i) {
 		HashCell *hc = grid[i];
 
@@ -135,9 +143,27 @@ void HybridHashGrid::RefreshMutex() {
 		}
 		std::cerr << j << " count: " << count << "/" << gridSize << "(" << 100.0 * count / gridSize << "%)" << std::endl;
 	}*/
+
+	/*// Debug code
+	u_int badCells = 0;
+	u_int emptyCells = 0;
+	for (u_int i = 0; i < gridSize; ++i) {
+		if (grid[i]) {
+			if (grid[i]->GetSize() > 5) {
+				//std::cerr << "HashGrid[" << i << "].size() = " << grid[i]->size() << std::endl;
+				++badCells;
+			}
+		} else
+			++emptyCells;
+	}
+	std::cerr << "HashMultiGrid.badCells = " << (100.f * badCells / (gridSize - emptyCells)) << "%" << std::endl;
+	std::cerr << "HashMultiGrid.emptyCells = " << (100.f * emptyCells / gridSize) << "%" << std::endl;*/
 }
 
-void HybridHashGrid::RefreshParallel(const unsigned int index, const unsigned int count) {
+void HybridMultiHashGrid::RefreshParallel(const unsigned int index, const unsigned int count) {
+	if (gridSize == 0)
+		return;
+
 	// Calculate the index of work this thread has to do
 	const unsigned int workSize = gridSize / count;
 	const unsigned int first = workSize * index;
@@ -156,20 +182,20 @@ void HybridHashGrid::RefreshParallel(const unsigned int index, const unsigned in
 		} else
 			++HHGlistEntries;
 	}
-	LOG(LUX_INFO, LUX_NOERROR) << "Hybrid hash cells storing a HHGKdTree: " << HHGKdTreeEntries << "/" << HHGlistEntries;
+	LOG(LUX_INFO, LUX_NOERROR) << "Hybrid multi-hash cells storing a HHGKdTree: " << HHGKdTreeEntries << "/" << HHGlistEntries;
 
-	// HybridHashGrid debug code
+	// HybridMultiHashGrid debug code
 	/*for (unsigned int i = 0; i < HybridHashGridSize; ++i) {
-		if (HybridHashGrid[i]) {
-			if (HybridHashGrid[i]->size() > 10) {
-				std::cerr << "HybridHashGrid[" << i << "].size() = " <<HybridHashGrid[i]->size() << std::endl;
+		if (HybridMultiHashGrid[i]) {
+			if (HybridMultiHashGrid[i]->size() > 10) {
+				std::cerr << "HybridMultiHashGrid[" << i << "].size() = " <<HybridMultiHashGrid[i]->size() << std::endl;
 			}
 		}
 	}*/
 }
 
-void HybridHashGrid::AddFlux(const Point &hitPoint, const Vector &wi,
-		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux) {
+void HybridMultiHashGrid::AddFlux(const Point &hitPoint, const Vector &wi,
+		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux, const u_int light_group) {
 	// Look for eye path hit points near the current hit point
 	Vector hh = (hitPoint - hitPoints->GetBBox().pMin) * invCellSize;
 	const int ix = int(hh.x);
@@ -182,37 +208,37 @@ void HybridHashGrid::AddFlux(const Point &hitPoint, const Vector &wi,
 	if ((iz < 0) || (iz > maxHashIndexZ))
 			return;
 
-	HashCell *hc = grid[Hash(ix, iy, iz)];
+	HashCell *hc = grid[Hash1(ix, iy, iz)];
 	if (hc)
-		hc->AddFlux(hitPoint, wi, sw, photonFlux);
+		hc->AddFlux(this, hitPoint, wi, sw, photonFlux, light_group);
+	else
+		return;
+
+	HashCell *hc2 = grid[Hash2(ix, iy, iz)];
+	if (hc2)
+		hc2->AddFlux(this, hitPoint, wi, sw, photonFlux, light_group);
+	/*else
+		return;
+
+	HashCell *hc3 = grid[Hash3(ix, iy, iz)];
+	if (hc3)
+		hc3->AddFlux(this, hitPoint, wi, sw, photonFlux, light_group);
+	 */
 }
 
-void HybridHashGrid::HashCell::AddFlux(const Point &hitPoint, const Vector &wi,
-		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux) {
+void HybridMultiHashGrid::HashCell::AddFlux(HybridMultiHashGrid *hhg, const Point &hitPoint,
+		const Vector &wi, const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux, const u_int light_group) {
 	switch (type) {
 		case LIST: {
 			std::list<HitPoint *>::iterator iter = list->begin();
 			while (iter != list->end()) {
 				HitPoint *hp = *iter++;
-
-				const float dist2 = DistanceSquared(hp->position, hitPoint);
-				if ((dist2 >  hp->accumPhotonRadius2))
-					continue;
-
-				const float dot = Dot(hp->normal, wi);
-				if (dot <= 0.0001f)
-					continue;
-
-				luxrays::AtomicInc(&hp->accumPhotonCount);
-				SWCSpectrum flux = photonFlux *
-					hp->bsdf->F(sw, wi, hp->wo, true) *
-					hp->throughput; // FIXME - not sure if the reverse flag should be true or false
-				SpectrumAtomicAdd(hp->accumReflectedFlux, flux);
+				hhg->AddFluxToHitPoint(hp, hitPoint, wi, sw, photonFlux, light_group);
 			}
 			break;
 		}
 		case KD_TREE: {
-			kdtree->AddFlux(hitPoint, wi, sw, photonFlux);
+			kdtree->AddFlux(hhg, hitPoint, wi, sw, photonFlux, light_group);
 			break;
 		}
 		default:
@@ -220,7 +246,7 @@ void HybridHashGrid::HashCell::AddFlux(const Point &hitPoint, const Vector &wi,
 	}
 }
 
-HybridHashGrid::HHGKdTree::HHGKdTree(std::list<HitPoint *> *hps, const unsigned int count) {
+HybridMultiHashGrid::HHGKdTree::HHGKdTree(std::list<HitPoint *> *hps, const unsigned int count) {
 	nNodes = count;
 	nextFreeNode = 1;
 
@@ -237,7 +263,7 @@ HybridHashGrid::HHGKdTree::HHGKdTree(std::list<HitPoint *> *hps, const unsigned 
 	std::list<HitPoint *>::iterator iter = hps->begin();
 	for (unsigned int i = 0; i < nNodes; ++i)  {
 		buildNodes.push_back(*iter++);
-		maxDistSquared = luxrays::Max(maxDistSquared, buildNodes[i]->accumPhotonRadius2);
+		maxDistSquared = max<float>(maxDistSquared, buildNodes[i]->accumPhotonRadius2);
 	}
 	//std::cerr << "kD-Tree search radius: " << sqrtf(maxDistSquared) << std::endl;
 
@@ -245,17 +271,17 @@ HybridHashGrid::HHGKdTree::HHGKdTree(std::list<HitPoint *> *hps, const unsigned 
 	assert (nNodes == nextFreeNode);
 }
 
-HybridHashGrid::HHGKdTree::~HHGKdTree() {
+HybridMultiHashGrid::HHGKdTree::~HHGKdTree() {
 	delete[] nodes;
 	delete[] nodeData;
 }
 
-bool HybridHashGrid::HHGKdTree::CompareNode::operator ()(const HitPoint *d1, const HitPoint *d2) const {
+bool HybridMultiHashGrid::HHGKdTree::CompareNode::operator ()(const HitPoint *d1, const HitPoint *d2) const {
 	return (d1->position[axis] == d2->position[axis]) ? (d1 < d2) :
 			(d1->position[axis] < d2->position[axis]);
 }
 
-void HybridHashGrid::HHGKdTree::RecursiveBuild(const unsigned int nodeNum, const unsigned int start,
+void HybridMultiHashGrid::HHGKdTree::RecursiveBuild(const unsigned int nodeNum, const unsigned int start,
 		const unsigned int end, std::vector<HitPoint *> &buildNodes) {
 	assert (nodeNum >= 0);
 	assert (start >= 0);
@@ -299,8 +325,8 @@ void HybridHashGrid::HHGKdTree::RecursiveBuild(const unsigned int nodeNum, const
 	}
 }
 
-void HybridHashGrid::HHGKdTree::AddFlux(const Point &p, const Vector &wi,
-		const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux) {
+void HybridMultiHashGrid::HHGKdTree::AddFlux(HybridMultiHashGrid *hhg, const Point &p,
+		const Vector &wi, const SpectrumWavelengths &sw, const SWCSpectrum &photonFlux, u_int light_group) {
 	unsigned int nodeNumStack[64];
 	// Start from the first node
 	nodeNumStack[0] = 0;
@@ -329,18 +355,6 @@ void HybridHashGrid::HHGKdTree::AddFlux(const Point &p, const Vector &wi,
 
 		// Process the leaf
 		HitPoint *hp = nodeData[nodeNum];
-		const float dist2 = DistanceSquared(hp->position, p);
-		if (dist2 > hp->accumPhotonRadius2)
-			continue;
-
-		const float dot = Dot(hp->normal, wi);
-		if (dot <= 0.0001f)
-			continue;
-
-		luxrays::AtomicInc(&hp->accumPhotonCount);
-		SWCSpectrum flux = photonFlux *
-			hp->bsdf->F(sw, wi, hp->wo, true) *
-			hp->throughput; // FIXME - not sure if the reverse flag should be true or false
-		SpectrumAtomicAdd(hp->accumReflectedFlux, flux);
+		hhg->AddFluxToHitPoint(hp, p, wi, sw, photonFlux, light_group);
 	}
 }
