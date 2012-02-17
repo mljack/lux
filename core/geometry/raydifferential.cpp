@@ -40,6 +40,22 @@ DifferentialGeometry::DifferentialGeometry(const Point &P,
 	ihandle = NULL;
 	scattered = false;
 }
+
+// DifferentialGeometry Method Definitions
+DifferentialGeometry::DifferentialGeometry(const Point &P,
+                const Vector &DPDU, const Vector &DPDV,
+                const Normal &DNDU, const Normal &DNDV,
+                float uu, float vv, const void *pr, float scale)
+        : p(P), dpdu(DPDU), dpdv(DPDV), dndu(DNDU), dndv(DNDV),
+          tangent(DPDU), bitangent(DPDV), btsign(1.f), Scale(scale) {
+        // Initialize _DifferentialGeometry_ from parameters
+        nn = Normal(Normalize(Cross(dpdu, dpdv)));
+        u = uu;
+        v = vv;
+        handle = pr;
+        ihandle = NULL;
+        scattered = false;
+}
 // Dade - added this costructor as a little optimization if the
 // normalized normal is already available
 DifferentialGeometry::DifferentialGeometry(const Point &P,
@@ -56,6 +72,22 @@ DifferentialGeometry::DifferentialGeometry(const Point &P,
 	ihandle = NULL;
 	scattered = false;
 }
+
+DifferentialGeometry::DifferentialGeometry(const Point &P,
+                const Normal &NN,
+                const Vector &DPDU, const Vector &DPDV,
+                const Normal &DNDU, const Normal &DNDV,
+                float uu, float vv, const void *pr, float scale)
+        : p(P), nn(NN), dpdu(DPDU), dpdv(DPDV), dndu(DNDU), dndv(DNDV),
+          tangent(DPDU), bitangent(DPDV), btsign(1.f), Scale(scale) {
+        // Initialize _DifferentialGeometry_ from parameters
+        u = uu;
+        v = vv;
+        handle = pr;
+        ihandle = NULL;
+        scattered = false;
+}
+
 DifferentialGeometry::DifferentialGeometry(const Point &P,
 		const Normal &NN,
 		const Vector &DPDU, const Vector &DPDV,
@@ -70,4 +102,20 @@ DifferentialGeometry::DifferentialGeometry(const Point &P,
 	handle = pr;
 	ihandle = NULL;
 	scattered = false;
+}
+
+DifferentialGeometry::DifferentialGeometry(const Point &P,
+                const Normal &NN,
+                const Vector &DPDU, const Vector &DPDV,
+                const Normal &DNDU, const Normal &DNDV,
+                const Vector &T, const Vector &BiT, float BiTsign,
+                float uu, float vv, const void *pr, float scale)
+        : p(P), nn(NN), dpdu(DPDU), dpdv(DPDV), dndu(DNDU), dndv(DNDV),
+          tangent(T), bitangent(BiT), btsign(BiTsign), Scale(scale) {
+        // Initialize _DifferentialGeometry_ from parameters
+        u = uu;
+        v = vv;
+        handle = pr;
+        ihandle = NULL;
+        scattered = false;
 }

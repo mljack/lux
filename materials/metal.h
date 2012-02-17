@@ -36,7 +36,7 @@ public:
 	Metal(boost::shared_ptr<SPD > &n, boost::shared_ptr<SPD > &k,
 		boost::shared_ptr<Texture<float> > &u,
 		boost::shared_ptr<Texture<float> > &v,
-		const ParamSet &mp);
+		const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc);
 	virtual ~Metal() { }
 
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,

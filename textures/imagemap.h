@@ -42,11 +42,11 @@ public:
 	// ImageTexture Public Methods
 	ImageTexture(TextureMapping2D *m, ImageTextureFilterType type,
 		const string &filename, int discardmm, float maxAniso,
-		ImageWrap wrapMode, float gain, float gamma) {
+		ImageWrap wrapMode, float gain, float gamma, bool ar_scale) {
 		filterType = type;
 		mapping = m;
 		mipmap = GetTexture(filterType, filename, discardmm, maxAniso,
-			wrapMode, gain, gamma);
+			wrapMode, gain, gamma, ar_scale);
 	}
 	virtual ~ImageTexture() {
 		// If the map isn't used anymore, remove it from the cache
@@ -99,7 +99,7 @@ private:
 	// ImageTexture Private Methods
 	static boost::shared_ptr<MIPMap> GetTexture(ImageTextureFilterType filterType,
 		const string &filename, int discardmm, float maxAniso,
-		ImageWrap wrap, float gain, float gamma);
+		ImageWrap wrap, float gain, float gamma, bool ar_scale = false);
 
 protected:
 	// ImageTexture Protected Data
@@ -116,7 +116,7 @@ public:
 		const string &filename, int discardmm, float maxAniso,
 		ImageWrap wrapMode, Channel ch, float gain, float gamma) :
 		ImageTexture(m, type, filename, discardmm, maxAniso, wrapMode,
-			gain, gamma) { channel = ch; }
+			gain, gamma, false) { channel = ch; }
 
 	virtual ~ImageFloatTexture() { }
 
@@ -156,9 +156,9 @@ public:
 	// ImageSpectrumTexture Public Methods
 	ImageSpectrumTexture(TextureMapping2D *m, ImageTextureFilterType type,
 		const string &filename, int discardmm, float maxAniso,
-		ImageWrap wrapMode, float gain, float gamma) :
+		ImageWrap wrapMode, float gain, float gamma, bool ar_scale) :
 		ImageTexture(m, type, filename, discardmm, maxAniso, wrapMode,
-			gain, gamma), isIlluminant(false) { }
+			gain, gamma, ar_scale), isIlluminant(false) { }
 
 	virtual ~ImageSpectrumTexture() { }
 
@@ -208,7 +208,7 @@ public:
 		const string &filename, int discardmm, float maxAniso,
 		ImageWrap wrapMode, float gain, float gamma) :
 		ImageTexture(m, type, filename, discardmm, maxAniso, wrapMode,
-			gain, gamma) { }
+			gain, gamma, false) { }
 
 	virtual ~NormalMapTexture() { }
 
@@ -237,7 +237,7 @@ private:
 // ImageTexture Method Definitions
 inline boost::shared_ptr<MIPMap> ImageTexture::GetTexture(ImageTextureFilterType filterType,
 	const string &filename, int discardmm, float maxAniso, ImageWrap wrap, float gain,
-	float gamma)
+	float gamma, bool ar_scale)
 {
 	// Look for texture in texture cache
 	TexInfo texInfo(filterType, filename, discardmm, maxAniso, wrap, gain, gamma);
@@ -248,6 +248,8 @@ inline boost::shared_ptr<MIPMap> ImageTexture::GetTexture(ImageTextureFilterType
 	}
 	int width, height;
 	std::auto_ptr<ImageData> imgdata(ReadImage(filename));
+	if (ar_scale)
+		imgdata->data_scale();
 	boost::shared_ptr<MIPMap> ret;
 	if (imgdata.get() != NULL) {
 		width=imgdata->getWidth();

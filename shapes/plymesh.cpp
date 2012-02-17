@@ -358,9 +358,12 @@ Shape* PlyMesh::CreateShape(const Transform &o2w,
 	}
 
 	bool genTangents = params.FindOneBool("generatetangents", false);
+	bool  sup = params.FindOneBool( "support", false );
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", (0,0,0) );
 
 	boost::shared_ptr<Texture<float> > dummytex;
-	Mesh *mesh = new Mesh(o2w, reverseOrientation, name, Mesh::ACCEL_AUTO,
+	Mesh *mesh = new Mesh(o2w, reverseOrientation, name, sup, proj_text, cam, Mesh::ACCEL_AUTO,
 		plyNbVerts, p, n, uv, Mesh::TRI_AUTO, plyNbTris, triVerts,
 		Mesh::QUAD_QUADRILATERAL, plyNbQuads, quadVerts, subdivType,
 		nsubdivlevels, displacementMap, displacementMapScale,
