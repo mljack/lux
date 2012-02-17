@@ -37,7 +37,7 @@ public:
 	// SchlickBSDF Public Methods
 	SchlickBSDF(const DifferentialGeometry &dgs, const Normal &ngeom,
 		const Fresnel *coatingFresnel, const MicrofacetDistribution *coatingDistribution,
-		bool multibounce, BSDF *base, const Volume *exterior, const Volume *interior);
+		bool multibounce, BSDF *base, const Volume *exterior, const Volume *interior, const SWCSpectrum bcolor = SWCSpectrum(0.f));
 	virtual inline u_int NumComponents() const;
 	virtual inline u_int NumComponents(BxDFType flags) const;
 	/**

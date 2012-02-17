@@ -66,8 +66,9 @@ BSDF *Glass2::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		fresnel = ARENA_ALLOC(arena, FresnelDielectric)(1.f,
 			SWCSpectrum(1.f), SWCSpectrum(0.f));
 
+	SWCSpectrum bcolor = (Sc->Evaluate(sw, dgs).Clamp(0.f, 10000.f))*dgs.Scale;
 	MultiBSDF *bsdf = ARENA_ALLOC(arena, MultiBSDF)(dgs, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor);
 	if (architectural)
 		bsdf->Add(ARENA_ALLOC(arena,
 			SimpleArchitecturalReflection)(fresnel));
@@ -86,10 +87,11 @@ BSDF *Glass2::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 Material* Glass2::CreateMaterial(const Transform &xform,
 	const ParamSet &mp)
 {
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	bool archi = mp.FindOneBool("architectural", false);
 	bool disp = mp.FindOneBool("dispersion", false);
 
-	return new Glass2(archi, disp, mp);
+	return new Glass2(archi, disp, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<Glass2> r("glass2");

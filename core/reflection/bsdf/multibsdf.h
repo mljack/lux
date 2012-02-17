@@ -35,7 +35,7 @@ class  MultiBSDF : public BSDF  {
 public:
 	// MultiBSDF Public Methods
 	MultiBSDF(const DifferentialGeometry &dgs, const Normal &ngeom,
-		const Volume *exterior, const Volume *interior);
+		const Volume *exterior, const Volume *interior, const SWCSpectrum bcolor = SWCSpectrum(0.f));
 	inline void Add(BxDF *bxdf);
 	virtual inline u_int NumComponents() const { return nBxDFs; }
 	virtual inline u_int NumComponents(BxDFType flags) const;

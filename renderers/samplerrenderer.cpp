@@ -127,6 +127,7 @@ void SamplerRenderer::Render(Scene *s) {
 		boost::mutex::scoped_lock lock(classWideMutex);
 
 		scene = s;
+		scene->arlux_setup();
 
 		if (scene->IsFilmOnly()) {
 			state = TERMINATE;

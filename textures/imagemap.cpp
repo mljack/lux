@@ -112,6 +112,16 @@ Texture<float> *ImageFloatTexture::CreateFloatTexture(const Transform &tex2world
 		float du = tp.FindOneFloat("udelta", 0.f);
 		float dv = tp.FindOneFloat("vdelta", 0.f);
 		map = new UVMapping2D(su, sv, du, dv);
+	} else if (type == "projector"){
+		float su = tp.FindOneFloat("uscale", 1.f);
+		float sv = tp.FindOneFloat("vscale", 1.f);
+		float du = tp.FindOneFloat("udelta", 0.f);
+		float dv = tp.FindOneFloat("vdelta", 0.f);
+		Vector dir = tp.FindOneVector("dir", Vector(0,0,1));
+		Vector up = tp.FindOneVector("up", Vector(0,1,0));
+		float fov = tp.FindOneFloat("fov", 0.f);
+		float yox = tp.FindOneFloat("y/x", 0.f);
+		map = new ProjectorMapping2D(su, sv, du, dv,dir, up, fov, yox);
 	} else if (type == "spherical") {
 		float su = tp.FindOneFloat("uscale", 1.f);
 		float sv = tp.FindOneFloat("vscale", 1.f);
@@ -206,6 +216,16 @@ Texture<SWCSpectrum> *ImageSpectrumTexture::CreateSWCSpectrumTexture(const Trans
 		float du = tp.FindOneFloat("udelta", 0.f);
 		float dv = tp.FindOneFloat("vdelta", 0.f);
 		map = new UVMapping2D(su, sv, du, dv);
+	} else if (type == "projector"){
+		float su = tp.FindOneFloat("uscale", 1.f);
+		float sv = tp.FindOneFloat("vscale", 1.f);
+		float du = tp.FindOneFloat("udelta", 0.f);
+		float dv = tp.FindOneFloat("vdelta", 0.f);
+		Vector dir = tp.FindOneVector("dir", Vector(0,0,1));
+		Vector up = tp.FindOneVector("up", Vector(0,1,0));
+		float fov = tp.FindOneFloat("fov", 0.f);
+		float yox = tp.FindOneFloat("y/x", 0.f);
+		map = new ProjectorMapping2D(su, sv, du, dv,dir, up, fov, yox);
 	} else if (type == "spherical") {
 		float su = tp.FindOneFloat("uscale", 1.f);
 		float sv = tp.FindOneFloat("vscale", 1.f);
@@ -243,13 +263,14 @@ Texture<SWCSpectrum> *ImageSpectrumTexture::CreateSWCSpectrumTexture(const Trans
 
 	float gain = tp.FindOneFloat("gain", 1.0f);
 	float gamma = tp.FindOneFloat("gamma", 1.0f);
+	bool ar_scale = tp.FindOneBool("ARScale", false);
 
 	FileData::decode(tp, "filename");
 	string filename = tp.FindOneString("filename", "");
 	int discardmm = tp.FindOneInt("discardmipmaps", 0);
 
 	ImageSpectrumTexture *tex = new ImageSpectrumTexture(map, filterType,
-		filename, discardmm, maxAniso, wrapMode, gain, gamma);
+		filename, discardmm, maxAniso, wrapMode, gain, gamma, ar_scale);
 
 	return tex;
 }
@@ -278,6 +299,16 @@ Texture<float> *NormalMapTexture::CreateFloatTexture(const Transform &tex2world,
 		float du = tp.FindOneFloat("udelta", 0.f);
 		float dv = tp.FindOneFloat("vdelta", 0.f);
 		map = new UVMapping2D(su, sv, du, dv);
+	} else if (type == "projector"){
+		float su = tp.FindOneFloat("uscale", 1.f);
+		float sv = tp.FindOneFloat("vscale", 1.f);
+		float du = tp.FindOneFloat("udelta", 0.f);
+		float dv = tp.FindOneFloat("vdelta", 0.f);
+		Vector dir = tp.FindOneVector("dir", Vector(0,0,1));
+		Vector up = tp.FindOneVector("up", Vector(0,1,0));
+		float fov = tp.FindOneFloat("fov", 0.f);
+		float yox = tp.FindOneFloat("y/x", 0.f);
+		map = new ProjectorMapping2D(su, sv, du, dv,dir, up, fov, yox);
 	} else if (type == "spherical") {
 		float su = tp.FindOneFloat("uscale", 1.f);
 		float sv = tp.FindOneFloat("vscale", 1.f);
