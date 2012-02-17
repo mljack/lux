@@ -44,7 +44,7 @@ BBox Sphere::ObjectBound() const
 	return BBox(Point(-radius, -radius, zMin),
 		Point(radius,  radius, zMax));
 }
-bool Sphere::Intersect(const Ray &r, Intersection *isect) const
+bool Sphere::Intersect(const Ray &r, Intersection *isect, bool null_shp_isect) const
 {
 	// Transform _Ray_ to object space
 	const Ray ray(WorldToObject(r));
@@ -108,7 +108,7 @@ bool Sphere::Intersect(const Ray &r, Intersection *isect) const
 		GetExterior(), GetInterior());
 	return true;
 }
-bool Sphere::IntersectP(const Ray &r) const
+bool Sphere::IntersectP(const Ray &r, bool null_shp_isect) const
 {
 	float phi;
 	Point phit;

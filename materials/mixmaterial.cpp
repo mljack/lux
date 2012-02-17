@@ -28,14 +28,16 @@
 #include "texture.h"
 #include "paramset.h"
 #include "dynload.h"
+#include "color.h"
 
 using namespace lux;
 
 // MixMaterial Method Definitions
 BSDF *MixMaterial::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const Intersection &isect, const DifferentialGeometry &dgShading) const {
+	SWCSpectrum bcolor = (Sc->Evaluate(sw, dgShading).Clamp(0.f, 10000.f))*dgShading.Scale;
 	MixBSDF *bsdf = ARENA_ALLOC(arena, MixBSDF)(dgShading, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor);
 	float amt = amount->Evaluate(sw, dgShading);
 	DifferentialGeometry dgS = dgShading;
 	mat1->GetShadingGeometry(sw, isect.dg.nn, &dgS);
@@ -59,9 +61,10 @@ Material* MixMaterial::CreateMaterial(const Transform &xform,
 		return NULL;
 	}
 
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<float> > amount(mp.GetFloatTexture("amount", 0.5f));
 
-	return new MixMaterial(amount, mat1, mat2, mp);
+	return new MixMaterial(amount, mat1, mat2, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<MixMaterial> r("mix");

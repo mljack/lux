@@ -31,8 +31,8 @@ namespace lux
 class Glass2 : public Material {
 public:
 	// Glass Public Methods
-	Glass2(bool archi, bool disp, const ParamSet &mp) : Material(mp), 
-		architectural(archi), dispersion(disp) { }
+	Glass2(bool archi, bool disp, const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : 
+		Material(mp), architectural(archi), dispersion(disp) { Sc = sc; }
 	virtual ~Glass2() { }
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		const Intersection &isect,

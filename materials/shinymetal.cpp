@@ -41,8 +41,9 @@ BSDF *ShinyMetal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const Intersection &isect, const DifferentialGeometry &dgs) const
 {
 	// Allocate _BSDF_
+	SWCSpectrum bcolor = (Sc->Evaluate(sw, dgs).Clamp(0.f, 10000.f))*dgs.Scale;
 	MultiBSDF *bsdf = ARENA_ALLOC(arena, MultiBSDF)(dgs, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor);
 	SWCSpectrum spec = Ks->Evaluate(sw, dgs).Clamp();
 	SWCSpectrum R = Kr->Evaluate(sw, dgs).Clamp();
 
@@ -72,6 +73,7 @@ BSDF *ShinyMetal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 }
 Material* ShinyMetal::CreateMaterial(const Transform &xform,
 		const ParamSet &mp) {
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Kr(mp.GetSWCSpectrumTexture("Kr", RGBColor(1.f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Ks(mp.GetSWCSpectrumTexture("Ks", RGBColor(1.f)));
 	boost::shared_ptr<Texture<float> > uroughness(mp.GetFloatTexture("uroughness", .1f));
@@ -79,7 +81,7 @@ Material* ShinyMetal::CreateMaterial(const Transform &xform,
 	boost::shared_ptr<Texture<float> > film(mp.GetFloatTexture("film", 0.f));				// Thin film thickness in nanometers
 	boost::shared_ptr<Texture<float> > filmindex(mp.GetFloatTexture("filmindex", 1.5f));				// Thin film index of refraction
 
-	return new ShinyMetal(Ks, uroughness, vroughness, film, filmindex, Kr, mp);
+	return new ShinyMetal(Ks, uroughness, vroughness, film, filmindex, Kr, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<ShinyMetal> r("shinymetal");

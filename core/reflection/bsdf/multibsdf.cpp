@@ -27,8 +27,8 @@
 using namespace lux;
 
 MultiBSDF::MultiBSDF(const DifferentialGeometry &dg, const Normal &ngeom,
-	const Volume *exterior, const Volume *interior) :
-	BSDF(dg, ngeom, exterior, interior)
+	const Volume *exterior, const Volume *interior, const SWCSpectrum bcolor) :
+	BSDF(dg, ngeom, exterior, interior, bcolor)
 {
 	nBxDFs = 0;
 }

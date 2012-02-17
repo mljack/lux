@@ -270,7 +270,7 @@ BBox MeshQuadrilateral::WorldBound() const {
 	return Union(BBox(p0, p1), BBox(p2, p3));
 }
 
-bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect) const {
+bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect) const {
 	// Compute intersection for quadrilateral
 	// based on "An Efficient Ray-Quadrilateral Intersection Test"
 	// by Ares Lagae and Philip Dutr�
@@ -279,6 +279,9 @@ bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect) const {
 
 	if (!idx)
 		return false;
+
+	//look if shape is a null type
+	if (null_shp_isect && mesh->support) return false;
 
 	// Get quadrilateral vertices in _p00_, _p10_, _p11_ and _p01_
 	const Point &p00 = mesh->p[idx[0]];
@@ -421,7 +424,7 @@ bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect) const {
 	return true;
 }
 
-bool MeshQuadrilateral::IntersectP(const Ray &ray) const {
+bool MeshQuadrilateral::IntersectP(const Ray &ray, bool null_shp_isect) const {
 	return Intersect(ray, NULL);
 }
 
@@ -449,6 +452,7 @@ void MeshQuadrilateral::GetShadingGeometry(const Transform &obj2world,
 {
 	if (!mesh->n) {
 		*dgShading = dg;
+		dgShading->Scale = GetScale();
 		if (!mesh->uvs) {
 			// Lotus - the length of dpdu/dpdv can be important for bumpmapping
 			const BBox bounds = MeshQuadrilateral::WorldBound();
@@ -528,5 +532,5 @@ void MeshQuadrilateral::GetShadingGeometry(const Transform &obj2world,
 	}
 
 	*dgShading = DifferentialGeometry(dg.p, ns, ss, ts, dndu, dndv,
-		dg.u, dg.v, this);
+		dg.u, dg.v, this, GetScale());
 }

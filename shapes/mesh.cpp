@@ -33,7 +33,7 @@
 using namespace lux;
 
 Mesh::Mesh(const Transform &o2w, bool ro, const string &name,
-	MeshAccelType acceltype,
+	bool sup, bool proj, Point cam_, MeshAccelType acceltype,
 	u_int nv, const Point *P, const Normal *N, const float *UV,
 	MeshTriangleType tritype, u_int trisCount, const int *tris,
 	MeshQuadType quadtype, u_int nquadsCount, const int *quads,
@@ -42,6 +42,12 @@ Mesh::Mesh(const Transform &o2w, bool ro, const string &name,
 	bool dmNormalSmooth, bool dmSharpBoundary, bool normalsplit, bool genTangents)
 	: Shape(o2w, ro, name)
 {
+	support = sup;
+	proj_text = proj;
+	if (sup)
+		proj_text = true;
+	cam = cam_;
+
 	accelType = acceltype;
 
 	subdivType = subdivtype;
@@ -260,7 +266,7 @@ void Mesh::Refine(vector<boost::shared_ptr<Primitive> > &refined,
 		switch (concreteSubdivType) {
 			case SUBDIV_LOOP: {
 				// Apply subdivision
-				LoopSubdiv loopsubdiv(ntris, nverts,
+				LoopSubdiv loopsubdiv(support, proj_text, cam, ntris, nverts,
 					triVertexIndex, p, uvs, n,
 					nSubdivLevels, displacementMap,
 					displacementMapScale,
@@ -610,6 +616,7 @@ void Mesh::GetShadingGeometry(const Transform &obj2world,
 {
 	if (!n) {
 		*dgShading = dg;
+		dgShading->Scale = GetScale();
 		return;
 	}
 
@@ -691,7 +698,7 @@ void Mesh::GetShadingGeometry(const Transform &obj2world,
 	}
 
 	*dgShading = DifferentialGeometry(dg.p, ns, ss, ts,
-		dndu, dndv, tangent, bitangent, sign, dg.u, dg.v, this);
+		dndu, dndv, tangent, bitangent, sign, dg.u, dg.v, this, GetScale());
 }
 
 // Class for storing mesh data pointers and holding returned tangent space data
@@ -1008,8 +1015,12 @@ static Shape *CreateShape( const Transform &o2w, bool reverseOrientation, const 
 
 	bool genTangents = params.FindOneBool("generatetangents", false);
 
+	bool  sup = params.FindOneBool( "support", false );
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", (0,0,0) );
+
 	return new Mesh(o2w, reverseOrientation, name,
-		accelType,
+		sup, proj_text, cam, accelType,
 		npi, P, N, UV,
 		triType, triIndicesCount, triIndices,
 		quadType, quadIndicesCount, quadIndices,
@@ -1053,6 +1064,9 @@ static Shape *CreateShape( const Transform &o2w, bool reverseOrientation, const 
 	accelTypeStr = params.FindOneString("acceltype", accelTypeStr);
  	string subdivscheme = params.FindOneString("subdivscheme", "loop");
 	int nSubdivLevels = max(0, params.FindOneInt("nsubdivlevels", params.FindOneInt("nlevels", 0)));
+	bool  sup = params.FindOneBool( "support", false );
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", (0,0,0) );
 
 	return CreateShape(o2w, reverseOrientation, params,
 		accelTypeStr, triTypeStr, quadTypeStr,

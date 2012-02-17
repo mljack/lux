@@ -86,10 +86,14 @@ BBox MeshBaryTriangle::WorldBound() const
 	return Union(BBox(p1, p2), p3);
 }
 
-bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect) const
+bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect, bool null_shp_isect) const
 {
 	Vector e1, e2, s1;
 	// Compute $\VEC{s}_1$
+
+	//look if shape is a null type
+	if (null_shp_isect && mesh->support) return false;
+
 	// Get triangle vertices in _p1_, _p2_, and _p3_
 	const Point &p1 = mesh->p[v[0]];
 	const Point &p2 = mesh->p[v[1]];
@@ -160,7 +164,7 @@ bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect) const
 	return true;
 }
 
-bool MeshBaryTriangle::IntersectP(const Ray &ray) const
+bool MeshBaryTriangle::IntersectP(const Ray &ray, bool null_shp_isect) const
 {
 	// Compute $\VEC{s}_1$
 	// Get triangle vertices in _p1_, _p2_, and _p3_
@@ -171,6 +175,10 @@ bool MeshBaryTriangle::IntersectP(const Ray &ray) const
 	Vector e2 = p3 - p1;
 	Vector s1 = Cross(ray.d, e2);
 	const float divisor = Dot(s1, e1);
+
+	//look if shape is a null type
+	if (null_shp_isect && mesh->support) return false;
+
 	if (divisor == 0.f)
 		return false;
 	const float invDivisor = 1.f / divisor;
@@ -251,6 +259,7 @@ void MeshBaryTriangle::GetShadingGeometry(const Transform &obj2world,
 {
 	if (!mesh->n) {
 		*dgShading = dg;
+		dgShading->Scale = GetScale();
 		return;
 	}
 
@@ -314,5 +323,5 @@ void MeshBaryTriangle::GetShadingGeometry(const Transform &obj2world,
 	}
 
 	*dgShading = DifferentialGeometry(dg.p, ns, ss, ts,
-		dndu, dndv, tangent, bitangent, btsign, dg.u, dg.v, this);
+		dndu, dndv, tangent, bitangent, btsign, dg.u, dg.v, this, GetScale());
 }
