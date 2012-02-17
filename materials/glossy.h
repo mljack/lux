@@ -38,8 +38,8 @@ public:
 		boost::shared_ptr<Texture<float> > &d,
 		boost::shared_ptr<Texture<float> > &u,
 		boost::shared_ptr<Texture<float> > &v,
-		const ParamSet &mp) : Material(mp), Kd(kd), Ks(ks), Ka(ka),
-		depth(d), index(i), nu(u), nv(v) { }
+		const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : Material(mp), Kd(kd), Ks(ks), Ka(ka),
+		depth(d), index(i), nu(u), nv(v) { Sc = sc; }
 	virtual ~Glossy() { }
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		const Intersection &isect,

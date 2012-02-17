@@ -177,7 +177,7 @@ public:
 	 * @param interior The volume on the opposite side
 	 */
 	BSDF(const DifferentialGeometry &dgs, const Normal &ngeom,
-		const Volume *exterior, const Volume *interior);
+		const Volume *exterior, const Volume *interior, const SWCSpectrum Bcolor = SWCSpectrum(0.f) );
 	/**
 	 * The number of BxDF composing the BSDF
 	 */
@@ -349,7 +349,7 @@ public:
 	 * @brief The volume in the opposite half space
 	 */
 	const Volume *exterior, *interior;
-
+	const SWCSpectrum Bcolor;
 	const CompositingParams *compParams; /** Compositing parameters pointer */
 	
 protected:
