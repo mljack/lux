@@ -80,28 +80,30 @@ public:
 	virtual ~VolumeIntegrator() { }
 	virtual u_int Li(const Scene &scene, const Ray &ray,
 		const Sample &sample, SWCSpectrum *L, float *alpha) const = 0;
+	virtual u_int Li(const Scene &scene, const Ray &ray,
+		const Sample &sample, SWCSpectrum *L, float *alpha, bool surf_type, bool path_type) const = 0;
 	// modulates the supplied SWCSpectrum with the transmittance along the ray
 	virtual void Transmittance(const Scene &scene, const Ray &ray,
 		const Sample &sample, float *alpha, SWCSpectrum *const L) const = 0;
 	virtual bool Intersect(const Scene &scene, const Sample &sample,
 		const Volume *volume, bool scatteredStart, const Ray &ray,
 		float u, Intersection *isect, BSDF **bsdf, float *pdf,
-		float *pdfBack, SWCSpectrum *L) const;
+		float *pdfBack, SWCSpectrum *L, bool null_shp_isect=false) const;
 	// Used to complete intersection data with LuxRays
 	virtual bool Intersect(const Scene &scene, const Sample &sample,
 		const Volume *volume, bool scatteredStart, const Ray &ray,
 		const luxrays::RayHit &rayHit, float u, Intersection *isect,
-		BSDF **bsdf, float *pdf, float *pdfBack, SWCSpectrum *L) const;
+		BSDF **bsdf, float *pdf, float *pdfBack, SWCSpectrum *L, bool null_shp_isect=false) const;
 	virtual bool Connect(const Scene &scene, const Sample &sample,
 		const Volume *volume, bool scatteredStart, bool scatteredEnd,
 		const Point &p0, const Point &p1, bool clip, SWCSpectrum *f,
-		float *pdf, float *pdfR) const;
+		float *pdf, float *pdfR, bool null_shapes_isect = false) const;
 	// Used with LuxRays, returns 1 if can connect, -1 if not and 0 if I have
 	// to continue to trace the ray
 	virtual int Connect(const Scene &scene, const Sample &sample,
 		const Volume **volume, bool scatteredStart, bool scatteredEnd,
 		const Ray &ray, const luxrays::RayHit &rayHit, SWCSpectrum *f,
-		float *pdf, float *pdfR) const;
+		float *pdf, float *pdfR, bool null_shapes_isect = false) const;
 };
 
 SWCSpectrum EstimateDirect(const Scene &scene, const Light &light,
@@ -117,6 +119,22 @@ u_int UniformSampleOneLight(const Scene &scene, const Sample &sample,
 	const float *lightSample, const float *lightNum,
 	const float *bsdfSample, const float *bsdfComponent, SWCSpectrum *L);
 
+//Augmented reality methods
+SWCSpectrum EstimateDirect(const Scene &scene, const Light &light,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, float ls1, float ls2, float ls3,
+	float bs1, float bs2, float bcs, int rayDepth, bool from_IsSup,
+	bool to_IsSup, bool path_type);
+SWCSpectrum UniformSampleAllLights(const Scene &scene, const Sample &sample,
+	const Point &p, const Normal &n, const Vector &wo, BSDF *bsdf,
+	const float *lightSample, const float *lightNum,
+	const float *bsdfSample, const float *bsdfComponent,
+	int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type);
+u_int UniformSampleOneLight(const Scene &scene, const Sample &sample,
+	const Point &p, const Normal &n, const Vector &wo, BSDF *bsdf,
+	const float *lightSample, const float *lightNum,
+	const float *bsdfSample, const float *bsdfComponent, SWCSpectrum *L,
+	int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type);
 }//namespace lux
  
 #endif // LUX_TRANSPORT_H

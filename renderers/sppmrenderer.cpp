@@ -131,6 +131,7 @@ void SPPMRenderer::Render(Scene *s) {
 		boost::mutex::scoped_lock lock(classWideMutex);
 
 		scene = s;
+		scene->arlux_setup();
 
 		sppmi = dynamic_cast<SPPMIntegrator*>(scene->surfaceIntegrator);
 		if (!sppmi) {

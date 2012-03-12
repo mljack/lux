@@ -33,7 +33,7 @@ public:
 	// Matte Public Methods
 	Matte(boost::shared_ptr<Texture<SWCSpectrum> > &kd,
 		boost::shared_ptr<Texture<float> > &sig,
-		const ParamSet &mp) : Material(mp), Kd(kd), sigma(sig) { }
+		const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : Material(mp), Kd(kd), sigma(sig) { Sc = sc; }
 	virtual ~Matte() { }
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		const Intersection &isect,

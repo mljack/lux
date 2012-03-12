@@ -76,6 +76,12 @@ public:
 			float uu, float vv,
 			const void *pr);
 	DifferentialGeometry(
+			const Point &P,
+			const Vector &DPDU,	const Vector &DPDV,
+			const Normal &DNDU, const Normal &DNDV,
+			float uu, float vv,
+			const void *pr, float scale);
+	DifferentialGeometry(
 			const Point &P, const Normal &NN,
 			const Vector &DPDU,	const Vector &DPDV,
 			const Normal &DNDU, const Normal &DNDV,
@@ -85,9 +91,22 @@ public:
 			const Point &P, const Normal &NN,
 			const Vector &DPDU,	const Vector &DPDV,
 			const Normal &DNDU, const Normal &DNDV,
+			float uu, float vv,
+			const void *pr, float scale);
+	DifferentialGeometry(
+			const Point &P, const Normal &NN,
+			const Vector &DPDU,	const Vector &DPDV,
+			const Normal &DNDU, const Normal &DNDV,
 			const Vector &T, const Vector &BiT, float BiTsign,
 			float uu, float vv,
 			const void *pr);
+	DifferentialGeometry(
+			const Point &P, const Normal &NN,
+			const Vector &DPDU,	const Vector &DPDV,
+			const Normal &DNDU, const Normal &DNDV,
+			const Vector &T, const Vector &BiT, float BiTsign,
+			float uu, float vv,
+			const void *pr, float scale);
 	void AdjustNormal(bool ro, bool swapsHandedness) {
 		// Adjust normal based on orientation and handedness
 		if (ro ^ swapsHandedness)
@@ -100,6 +119,7 @@ public:
 	float u, v;
 	const void* handle;
 	const void* ihandle; // handle to intersected primitive, used with instances
+	mutable float Scale;
 
 	// Dade - shape specific data, useful to "transport" informatin between
 	// shape intersection method and GetShadingGeometry()

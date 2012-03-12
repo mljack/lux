@@ -50,6 +50,10 @@ Shape* StlMesh::CreateShape(const Transform &o2w,
 
 	bool recenterMesh = params.FindOneBool("recenter_mesh", false);
 
+	bool  sup = params.FindOneBool( "support", false );
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", (0,0,0) );
+
 	Mesh::MeshSubdivType subdivType;
 
 	if (subdivscheme == "loop")
@@ -247,7 +251,7 @@ Shape* StlMesh::CreateShape(const Transform &o2w,
 
 	boost::shared_ptr<Texture<float> > displacementMap;
 
-	return new Mesh(o2w, reverseOrientation, name, Mesh::ACCEL_AUTO,
+	return new Mesh(o2w, reverseOrientation, name, sup,  proj_text, cam, Mesh::ACCEL_AUTO,
 					Vertices.size(), &Vertices[0], NULL, NULL,
 					Mesh::TRI_AUTO, uNFaces, &Faces[0],
 					Mesh::QUAD_QUADRILATERAL, 0, NULL,
