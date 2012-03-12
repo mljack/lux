@@ -42,6 +42,8 @@ public:
 	virtual void RequestSamples(Sample *sample, const Scene &scene);
 	virtual u_int Li(const Scene &, const Ray &ray,
 		const Sample &sample, SWCSpectrum *L, float *alpha) const;
+	virtual u_int Li(const Scene &, const Ray &ray,
+		const Sample &sample, SWCSpectrum *L, float *alpha, bool from_IsSup, bool path_type) const;
 	virtual bool Intersect(const Scene &scene, const Sample &sample,
 		const Volume *volume, bool scatteredStart, const Ray &ray,
 		float u, Intersection *isect, BSDF **bsdf, float *pdf,

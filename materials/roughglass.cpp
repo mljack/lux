@@ -43,8 +43,10 @@ BSDF *RoughGlass::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	// NOTE - lordcrc - Bugfix, pbrt tracker id 0000078: index of refraction swapped and not recorded
 	float ior = index->Evaluate(sw, dgs);
 	float cb = cauchyb->Evaluate(sw, dgs);
+	SWCSpectrum bcolor = (Sc->Evaluate(sw, dgs).Clamp(0.f, 10000.f))*dgs.Scale;
+
 	MultiBSDF<2> *bsdf = ARENA_ALLOC(arena, MultiBSDF<2>)(dgs, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor);
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
 	SWCSpectrum R = Kr->Evaluate(sw, dgs).Clamp(0.f, 1.f);
 	SWCSpectrum T = Kt->Evaluate(sw, dgs).Clamp(0.f, 1.f);
@@ -73,6 +75,7 @@ BSDF *RoughGlass::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 }
 Material* RoughGlass::CreateMaterial(const Transform &xform,
 		const ParamSet &mp) {
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Kr(mp.GetSWCSpectrumTexture("Kr", RGBColor(1.f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Kt(mp.GetSWCSpectrumTexture("Kt", RGBColor(1.f)));
 	boost::shared_ptr<Texture<float> > uroughness(mp.GetFloatTexture("uroughness", .001f));
@@ -80,7 +83,7 @@ Material* RoughGlass::CreateMaterial(const Transform &xform,
 	boost::shared_ptr<Texture<float> > index(mp.GetFloatTexture("index", 1.5f));
 	boost::shared_ptr<Texture<float> > cbf(mp.GetFloatTexture("cauchyb", 0.f));				// Cauchy B coefficient
 
-	return new RoughGlass(Kr, Kt, uroughness, vroughness, index, cbf, mp);
+	return new RoughGlass(Kr, Kt, uroughness, vroughness, index, cbf, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<RoughGlass> r("roughglass");
