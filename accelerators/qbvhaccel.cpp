@@ -75,17 +75,17 @@ public:
 			Union(primitives[2]->WorldBound(),
 			primitives[3]->WorldBound()));
 	}
-	virtual bool Intersect(const Ray &ray, Intersection *isect) const
+	virtual bool Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect) const
 	{
 		bool hit = false;
 		for (u_int i = 0; i < 4; ++i)
-			hit |= primitives[i]->Intersect(ray, isect);
+			hit |= primitives[i]->Intersect(ray, isect, null_shp_isect);
 		return hit;
 	}
-	virtual bool IntersectP(const Ray &ray) const
+	virtual bool IntersectP(const Ray &ray, bool null_shp_isect) const
 	{
 		for (u_int i = 0; i < 4; ++i)
-			if (primitives[i]->IntersectP(ray))
+			if (primitives[i]->IntersectP(ray, null_shp_isect))
 				return true;
 		return false;
 	}
@@ -98,9 +98,9 @@ public:
 		for (u_int i = 0; i < 4; ++i)
 			prims.push_back(primitives[i]);
 	}
-	virtual bool Intersect(const QuadRay &ray4, const Ray &ray, Intersection *isect) const
+	virtual bool Intersect(const QuadRay &ray4, const Ray &ray, Intersection *isect, bool null_shp_isect) const
 	{
-		const bool hit = Intersect(ray, isect);
+		const bool hit = Intersect(ray, isect, null_shp_isect);
 		if (!hit)
 			return false;
 		ray4.maxt = _mm_set1_ps(ray.maxt);
@@ -139,7 +139,7 @@ public:
 		}
 	}
 	virtual ~QuadTriangle() { }
-	virtual bool Intersect(const QuadRay &ray4, const Ray &ray, Intersection *isect) const
+	virtual bool Intersect(const QuadRay &ray4, const Ray &ray, Intersection *isect, bool null_shp_isect) const
 	{
 		const __m128 zero = _mm_set1_ps(0.f);
 		const __m128 s1x = _mm_sub_ps(_mm_mul_ps(ray4.dy, edge2z),
@@ -193,6 +193,9 @@ public:
 
 		const MeshBaryTriangle *triangle(static_cast<const MeshBaryTriangle *>(primitives[hit].get()));
 
+		//look if shape is a null type
+		if (null_shp_isect && triangle->IsSupport()) return false;
+
 		const Point o(reinterpret_cast<const float *>(&origx)[hit],
 			reinterpret_cast<const float *>(&origy)[hit],
 			reinterpret_cast<const float *>(&origz)[hit]);
@@ -233,10 +236,19 @@ public:
 		}
 
 		// Interpolate $(u,v)$ triangle parametric coordinates
-		const float tu = _b0 * uvs[0][0] + _b1 * uvs[1][0] +
+		float tu_ = _b0 * uvs[0][0] + _b1 * uvs[1][0] +
 			_b2 * uvs[2][0];
-		const float tv = _b0 * uvs[0][1] + _b1 * uvs[1][1] +
+		float tv_ = _b0 * uvs[0][1] + _b1 * uvs[1][1] +
 			_b2 * uvs[2][1];
+
+		if (triangle->mesh->proj_text) {
+			Vector wh = Normalize(pp - triangle->mesh->cam);
+			tu_ = SphericalPhi(wh) ;
+			tv_ = SphericalTheta(wh) ;
+		}
+		const float tu = tu_;
+		const float tv = tv_;
+
 
 		isect->dg = DifferentialGeometry(pp, nn, dpdu, dpdv,
 			Normal(0, 0, 0), Normal(0, 0, 0), tu, tv, triangle);
@@ -687,7 +699,7 @@ int32_t QBVHNode::BBoxIntersect(const QuadRay &ray4, const __m128 invDir[3],
 }
 
 /***************************************************/
-bool QBVHAccel::Intersect(const Ray &ray, Intersection *isect) const
+bool QBVHAccel::Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect) const
 {
 	//------------------------------
 	// Prepare the ray for intersection
@@ -741,7 +753,7 @@ bool QBVHAccel::Intersect(const Ray &ray, Intersection *isect) const
 			const u_int offset = QBVHNode::FirstQuadIndex(leafData);
 
 			for (u_int primNumber = offset; primNumber < (offset + nbQuadPrimitives); ++primNumber)
-				hit |= prims[primNumber]->Intersect(ray4, ray, isect);
+				hit |= prims[primNumber]->Intersect(ray4, ray, isect, null_shp_isect);
 		}//end of the else
 	}
 
@@ -749,7 +761,7 @@ bool QBVHAccel::Intersect(const Ray &ray, Intersection *isect) const
 }
 
 /***************************************************/
-bool QBVHAccel::IntersectP(const Ray &ray) const
+bool QBVHAccel::IntersectP(const Ray &ray, bool null_shp_isect) const
 {
 	//------------------------------
 	// Prepare the ray for intersection
@@ -802,7 +814,7 @@ bool QBVHAccel::IntersectP(const Ray &ray) const
 			const u_int offset = QBVHNode::FirstQuadIndex(leafData);
 
 			for (u_int primNumber = offset; primNumber < (offset + nbQuadPrimitives); ++primNumber) {
-				if (prims[primNumber]->IntersectP(ray))
+				if (prims[primNumber]->IntersectP(ray, null_shp_isect))
 					return true;
 			}
 		} // end of the else
@@ -828,10 +840,10 @@ BBox QBVHAccel::WorldBound() const
 
 void QBVHAccel::GetPrimitives(vector<boost::shared_ptr<Primitive> > &primitives) const
 {
-	primitives.reserve(primitives.size() + nPrims);
-	for(u_int i = 0; i < nPrims; ++i)
+	primitives.reserve(primitives.size() + nQuads);
+	for(u_int i = 0; i < nQuads; ++i)
 		primitives.push_back(prims[i]);
-	for (u_int i = 0; i < nPrims; ++i)
+	for (u_int i = 0; i < nQuads; ++i)
 		prims[i]->GetPrimitives(primitives);
 }
 

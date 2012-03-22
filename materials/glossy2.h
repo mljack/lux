@@ -39,8 +39,8 @@ public:
 		boost::shared_ptr<Texture<float> > &u,
 		boost::shared_ptr<Texture<float> > &v,
 		bool mb,
-		const ParamSet &mp) : Material(mp), Kd(kd), Ks(ks), Ka(ka),
-		depth(d), index(i), nu(u), nv(v), multibounce(mb) { }
+		const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : Material(mp), Kd(kd), Ks(ks), Ka(ka),
+		depth(d), index(i), nu(u), nv(v), multibounce(mb) { Sc = sc; }
 	virtual ~Glossy2() { }
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		const Intersection &isect,
@@ -67,8 +67,8 @@ public:
 		boost::shared_ptr<Texture<float> > &u,
 		boost::shared_ptr<Texture<float> > &v,
 		bool mb,
-		const ParamSet &mp) : Material(mp), basemat(bmat), Ks(ks), Ka(ka),
-		depth(d), index(i), nu(u), nv(v), multibounce(mb) { }
+		const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : Material(mp), basemat(bmat), Ks(ks), Ka(ka),
+		depth(d), index(i), nu(u), nv(v), multibounce(mb) { Sc = sc; }
 	virtual ~GlossyCoating() { }
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		const Intersection &isect,

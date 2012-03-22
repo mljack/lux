@@ -131,6 +131,14 @@ u_int MultiScattering::Li(const Scene &scene, const Ray &ray,
 	return light->group;
 }
 
+u_int MultiScattering::Li(const Scene &scene, const Ray &ray,
+	const Sample &sample, SWCSpectrum *Lv, float *alpha, bool from_IsSup, bool path_type) const
+{
+	if ( !from_IsSup )
+		return Li(scene, ray, sample, Lv, alpha);
+	else {	*Lv = 0.f; return false; }
+}
+
 bool MultiScattering::Intersect(const Scene &scene, const Sample &sample,
 	const Volume *volume, bool scatteredStart, const Ray &ray, float u,
 	Intersection *isect, BSDF **bsdf, float *pdf, float *pdfBack,
