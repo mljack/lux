@@ -45,7 +45,8 @@ public:
 		boost::shared_ptr<Texture<float> > &m1,
 		boost::shared_ptr<Texture<float> > &m2,
 		boost::shared_ptr<Texture<float> > &m3,
-		const ParamSet &mp);
+		const ParamSet &mp,
+		boost::shared_ptr<Texture<SWCSpectrum> > &sc);
 	virtual ~CarPaint() { }
 
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,

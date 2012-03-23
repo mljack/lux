@@ -237,7 +237,7 @@ static bool intersectPlane(const Ray &ray, const Point &p, const Vector &n, floa
 
 enum LastChange { iplus, jminus, kplus, iminus, jplus, kminus };
 
-bool MeshMicroDisplacementTriangle::Intersect(const Ray &ray, Intersection* isect) const
+bool MeshMicroDisplacementTriangle::Intersect(const Ray &ray, Intersection* isect, bool null_shp_isect) const
 {
 	// Compute $\VEC{s}_1$
 	// Get triangle vertices in _p1_, _p2_, and _p3_
@@ -697,7 +697,7 @@ bool MeshMicroDisplacementTriangle::Intersect(const Ray &ray, Intersection* isec
 	return false;
 }
 
-bool MeshMicroDisplacementTriangle::IntersectP(const Ray &ray) const
+bool MeshMicroDisplacementTriangle::IntersectP(const Ray &ray, bool null_shp_isect) const
 {
 	// TODO - optimized implementation
 
@@ -764,6 +764,7 @@ void MeshMicroDisplacementTriangle::GetShadingGeometry(const Transform &obj2worl
 {
 	if (!mesh->displacementMapNormalSmooth || !mesh->n) {
 		*dgShading = dg;
+		dgShading->Scale = GetScale();
 		return;
 	}
 
@@ -804,7 +805,7 @@ void MeshMicroDisplacementTriangle::GetShadingGeometry(const Transform &obj2worl
 	}
 
 	*dgShading = DifferentialGeometry(p, ns, ss, ts,
-		dndu, dndv, dg.u, dg.v, this);
+		dndu, dndv, dg.u, dg.v, this, GetScale());
 	float dddu, dddv;
 	SpectrumWavelengths sw;
 	mesh->displacementMap->GetDuv(sw, *dgShading, 0.001f, &dddu, &dddv);
