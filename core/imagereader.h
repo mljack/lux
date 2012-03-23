@@ -49,6 +49,8 @@ public:
 
 	~ImageData();
 
+	void data_scale();
+
 	u_int getWidth() { return width_; }
 
 	u_int getHeight() { return height_; }

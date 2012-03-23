@@ -340,6 +340,8 @@ void HybridSamplerRenderer::Render(Scene *s) {
 		boost::mutex::scoped_lock lock(classWideMutex);
 
 		scene = s;
+		// Not yet available!
+		//scene->arlux_setup();
 
 		if (scene->IsFilmOnly()) {
 			state = TERMINATE;
