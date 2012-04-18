@@ -214,10 +214,13 @@ SET(lux_filters_src
 SOURCE_GROUP("Source Files\\Filters" FILES ${lux_filters_src})
 
 SET(lux_integrators_src
+	integrators/ardirectlighting.cpp
+	integrators/arpath.cpp
 	integrators/bidirectional.cpp
 	integrators/directlighting.cpp
 	integrators/distributedpath.cpp
 	integrators/emission.cpp
+	integrators/envpath.cpp
 	integrators/exphotonmap.cpp
 	integrators/igi.cpp
 	integrators/multi.cpp
@@ -228,6 +231,8 @@ SET(lux_integrators_src
 SOURCE_GROUP("Source Files\\Integrators" FILES ${lux_integrators_src})
 
 SET(lux_lights_src
+	lights/mediancut/mediancut.cpp
+	lights/mediancut/summedareatable.cpp
 	lights/area.cpp
 	lights/distant.cpp
 	lights/infinite.cpp
@@ -648,6 +653,8 @@ SET(lux_filters_hdr
 	)
 SOURCE_GROUP("Header Files\\Filters" FILES ${lux_filters_hdr})
 SET(lux_integrators_hdr
+	integrators/ardirectlighting.h
+	integrators/arpath.h
 	integrators/bidirectional.h
 	integrators/directlighting.h
 	integrators/distributedpath.h

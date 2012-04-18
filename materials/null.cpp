@@ -28,6 +28,8 @@
 #include "nulltransmission.h"
 #include "paramset.h"
 #include "dynload.h"
+#include "color.h"
+#include "texture.h"
 
 using namespace lux;
 
@@ -35,10 +37,12 @@ using namespace lux;
 BSDF *Null::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const Intersection &isect, const DifferentialGeometry &dgShading) const
 {
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgShading);
+	float bscale = dgShading.Scale;
 	// Allocate _BSDF_, possibly doing bump-mapping with _bumpMap_
 	SingleBSDF *bsdf = ARENA_ALLOC(arena, SingleBSDF)(dgShading,
 		isect.dg.nn, ARENA_ALLOC(arena, NullTransmission)(),
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor, bscale);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(&compParams);
@@ -47,7 +51,8 @@ BSDF *Null::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 }
 Material* Null::CreateMaterial(const Transform &xform,
 		const ParamSet &mp) {
-	return new Null(mp);
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
+	return new Null(mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<Null> r("null");

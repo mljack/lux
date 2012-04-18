@@ -80,9 +80,10 @@ private:
 // SpotLight Method Definitions
 SpotLight::SpotLight(const Transform &light2world,
 	const boost::shared_ptr< Texture<SWCSpectrum> > &L, 
-	float g, float power, float efficacy, float width, float fall)
+	float g, float power, float efficacy, float width, float fall, bool sup)
 	: Light(light2world), Lbase(L), gain(g)
 {
+	support = sup;
 	lightPos = LightToWorld(Point(0,0,0));
 
 	cosTotalWidth = cosf(Radians(width));
@@ -150,6 +151,7 @@ Light* SpotLight::CreateLight(const Transform &l2w, const ParamSet &paramSet)
 	// Compute spotlight world to light transformation
 	Point from = paramSet.FindOnePoint("from", Point(0,0,0));
 	Point to = paramSet.FindOnePoint("to", Point(0,0,1));
+	bool sup = paramSet.FindOneBool("support", false);
 	Vector dir = Normalize(to - from);
 	Vector du, dv;
 	CoordinateSystem(dir, &du, &dv);
@@ -163,7 +165,7 @@ Light* SpotLight::CreateLight(const Transform &l2w, const ParamSet &paramSet)
 		dirToZ.GetInverse();
 
 	SpotLight *l = new SpotLight(light2world, L, g, p, e, coneangle,
-		coneangle-conedelta);
+		coneangle-conedelta, sup);
 	l->hints.InitParam(paramSet);
 	return l;
 }

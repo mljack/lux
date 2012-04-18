@@ -35,8 +35,8 @@ using namespace lux;
 // LayeredBSDF Method Definitions
 
 LayeredBSDF::LayeredBSDF(const DifferentialGeometry &dgs, const Normal &ngeom,
-	const Volume *exterior, const Volume *interior) :
-	BSDF(dgs, ngeom, exterior, interior)
+	const Volume *exterior, const Volume *interior, const SWCSpectrum bcolor, const float bscale ) :
+	BSDF(dgs, ngeom, exterior, interior, bcolor, bscale)
 {
 	nBSDFs = 0;
 	maxNumBounces = 1; // Note this gets changed when layers are added
