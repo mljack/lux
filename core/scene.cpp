@@ -189,3 +189,36 @@ void Scene::Transmittance(const Ray &ray, const Sample &sample,
 	SWCSpectrum *const L) const {
 	volumeIntegrator->Transmittance(*this, ray, sample, NULL, L);
 }
+
+void Scene::arlux_setup(void) 
+{
+	vector<boost::shared_ptr<Primitive> > objects;
+	Aggregate *aggr = dynamic_cast<Aggregate*>(aggregate.get());
+	aggr->GetPrimitives(objects);
+
+	Primitive *shp;
+
+	Vector Z;
+	Point cam = camera->CameraToWorld( Point(0.f, 0.f, 0.f) );
+	for (u_int i=0; i < objects.size(); i++) {
+
+		shp = objects[i].get();
+		if( shp != NULL ) {
+			if( shp->IsSupport() ) {
+				Vector N;
+				Point P;
+				float Pow =0.f;
+				shp->GetNormal(&N);
+				shp->GetBaryPoint(&P);
+				Z = cam-P;
+				if( Dot(N,Z) < 0.f )  
+					N = N * (-1);
+				for( u_int k=0 ; k < lights.size() ; k++ )
+					if (lights[k]->IsSupport()) {
+						Pow += lights[k]->DirProb(N);
+					}
+				shp->SetScale(Pow);
+			}
+		}
+	}
+}

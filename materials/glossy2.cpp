@@ -45,6 +45,8 @@ BSDF *Glossy2::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 {
 	// Allocate _BSDF_
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 	SWCSpectrum d(Kd->Evaluate(sw, dgs).Clamp(0.f, 1.f));
 	SWCSpectrum s(Ks->Evaluate(sw, dgs));
 	float i = index->Evaluate(sw, dgs);
@@ -66,7 +68,7 @@ BSDF *Glossy2::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const float anisotropy = u2 < v2 ? 1.f - u2 / v2 : v2 / u2 - 1.f;
 	SingleBSDF *bsdf = ARENA_ALLOC(arena, SingleBSDF)(dgs,
 		isect.dg.nn, ARENA_ALLOC(arena, SchlickBRDF)(d, s, a, ld, u * v,
-		anisotropy, multibounce), isect.exterior, isect.interior);
+		anisotropy, multibounce), isect.exterior, isect.interior, bcolor, bscale);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(&compParams);
@@ -75,6 +77,7 @@ BSDF *Glossy2::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 }
 Material* Glossy2::CreateMaterial(const Transform &xform,
 		const ParamSet &mp) {
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Kd(mp.GetSWCSpectrumTexture("Kd", RGBColor(1.f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Ks(mp.GetSWCSpectrumTexture("Ks", RGBColor(1.f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Ka(mp.GetSWCSpectrumTexture("Ka", RGBColor(.0f)));
@@ -84,7 +87,7 @@ Material* Glossy2::CreateMaterial(const Transform &xform,
 	boost::shared_ptr<Texture<float> > vroughness(mp.GetFloatTexture("vroughness", .1f));
 	bool mb = mp.FindOneBool("multibounce", false);
 
-	return new Glossy2(Kd, Ks, Ka, i, d, uroughness, vroughness, mb, mp);
+	return new Glossy2(Kd, Ks, Ka, i, d, uroughness, vroughness, mb, mp, Sc);
 }
 
 // GlossyCoating Method Definitions
@@ -94,7 +97,7 @@ BSDF *GlossyCoating::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	DifferentialGeometry dgShading = dgs;
 	basemat->GetShadingGeometry(sw, isect.dg.nn, &dgShading);
 	BSDF *base = basemat->GetBSDF(arena, sw, isect, dgShading);
-
+	SWCSpectrum bcolor = (Sc->Evaluate(sw, dgs).Clamp(0.f, 10000.f))*dgs.Scale;
 	// Allocate _BSDF_
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
 	SWCSpectrum s(Ks->Evaluate(sw, dgs));
@@ -119,7 +122,7 @@ BSDF *GlossyCoating::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	Fresnel *fresnel = ARENA_ALLOC(arena, FresnelSlick)(s, a);
 	MicrofacetDistribution* md = ARENA_ALLOC(arena, SchlickDistribution)(u * v, anisotropy);
 
-	SchlickBSDF *bsdf = ARENA_ALLOC(arena, SchlickBSDF)(dgs, isect.dg.nn, fresnel, md, multibounce, a, ld, base, isect.exterior, isect.interior);
+	SchlickBSDF *bsdf = ARENA_ALLOC(arena, SchlickBSDF)(dgs, isect.dg.nn, fresnel, md, multibounce, a, ld, base, isect.exterior, isect.interior, bcolor);
 	//SingleBSDF *bsdf = ARENA_ALLOC(arena, SingleBSDF)(dgs, isect.dg.nn, 
 	//	ARENA_ALLOC(arena, MicrofacetReflection)(SWCSpectrum(1.f), fresnel, md, false), 
 	//	isect.exterior, isect.interior);
@@ -136,6 +139,7 @@ Material* GlossyCoating::CreateMaterial(const Transform &xform,
 		LOG( LUX_ERROR,LUX_BADTOKEN)<<"Base material for glossycoating is incorrect";
 		return NULL;
 	}
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Ks(mp.GetSWCSpectrumTexture("Ks", RGBColor(1.f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Ka(mp.GetSWCSpectrumTexture("Ka", RGBColor(.0f)));
 	boost::shared_ptr<Texture<float> > i(mp.GetFloatTexture("index", 0.0f));
@@ -144,7 +148,7 @@ Material* GlossyCoating::CreateMaterial(const Transform &xform,
 	boost::shared_ptr<Texture<float> > vroughness(mp.GetFloatTexture("vroughness", .1f));
 	bool mb = mp.FindOneBool("multibounce", false);
 
-	return new GlossyCoating(basemat, Ks, Ka, i, d, uroughness, vroughness, mb, mp);
+	return new GlossyCoating(basemat, Ks, Ka, i, d, uroughness, vroughness, mb, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<Glossy2> r("glossy");

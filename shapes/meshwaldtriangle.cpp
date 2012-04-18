@@ -152,8 +152,11 @@ MeshWaldTriangle::MeshWaldTriangle(const Mesh *m, u_int n)
 	}
 }
 
-bool MeshWaldTriangle::Intersect(const Ray &ray, Intersection *isect) const
+bool MeshWaldTriangle::Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect) const
 {
+	//look if shape is a null type
+	if (null_shp_isect && mesh->support) return false;
+
 	float o0, o1, o2, d0, d1, d2;
 	switch (intersectionType) {
 		case DOMINANT_X: {
@@ -218,10 +221,19 @@ bool MeshWaldTriangle::Intersect(const Ray &ray, Intersection *isect) const
 	float uvs[3][2];
 	GetUVs(uvs);
 	// Interpolate $(u,v)$ triangle parametric coordinates
-	const float tu = b0 * uvs[0][0] + uu * uvs[1][0] + vv * uvs[2][0];
-	const float tv = b0 * uvs[0][1] + uu * uvs[1][1] + vv * uvs[2][1];
+
+	float tu_ = b0 * uvs[0][0] + uu * uvs[1][0] + vv * uvs[2][0];
+	float tv_ = b0 * uvs[0][1] + uu * uvs[1][1] + vv * uvs[2][1];
 
 	const Point pp(b0 * mesh->p[v[0]] + uu * mesh->p[v[1]] + vv * mesh->p[v[2]]);
+
+	if (mesh->proj_text){
+		Vector wh = Normalize(pp-mesh->cam);
+		tu_ = SphericalPhi(wh) ;
+		tv_ = SphericalTheta(wh) ;
+	}
+	const float tu = tu_;
+	const float tv = tv_;
 
 	isect->dg = DifferentialGeometry(pp, normalizedNormal, dpdu, dpdv,
 		Normal(0, 0, 0), Normal(0, 0, 0), tu, tv, this);
@@ -235,7 +247,7 @@ bool MeshWaldTriangle::Intersect(const Ray &ray, Intersection *isect) const
 	return true;
 }
 
-bool MeshWaldTriangle::IntersectP(const Ray &ray) const
+bool MeshWaldTriangle::IntersectP(const Ray &ray, bool null_shp_isect) const
 {
 	float o0, o1, o2, d0, d1, d2;
 	switch (intersectionType) {

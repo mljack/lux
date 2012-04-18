@@ -41,8 +41,11 @@ BSDF *MatteTranslucent::GetBSDF(MemoryArena &arena,
 	const Intersection &isect, const DifferentialGeometry &dgs) const
 {
 	// Allocate _BSDF_
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
+
 	MultiBSDF<2> *bsdf = ARENA_ALLOC(arena, MultiBSDF<2>)(dgs, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor, bscale);
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
 	SWCSpectrum R = Kr->Evaluate(sw, dgs).Clamp(0.f, 1.f);
 	SWCSpectrum T = Kt->Evaluate(sw, dgs).Clamp(0.f, 1.f);
@@ -72,12 +75,13 @@ BSDF *MatteTranslucent::GetBSDF(MemoryArena &arena,
 }
 Material* MatteTranslucent::CreateMaterial(const Transform &xform,
 		const ParamSet &mp) {
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Kr(mp.GetSWCSpectrumTexture("Kr", RGBColor(1.f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Kt(mp.GetSWCSpectrumTexture("Kt", RGBColor(1.f)));
 	boost::shared_ptr<Texture<float> > sigma(mp.GetFloatTexture("sigma", 0.f));
 	bool conserving = mp.FindOneBool("energyconserving", false);
 
-	return new MatteTranslucent(Kr, Kt, sigma, conserving, mp);
+	return new MatteTranslucent(Kr, Kt, sigma, conserving, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<MatteTranslucent> r("mattetranslucent");

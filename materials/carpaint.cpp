@@ -51,19 +51,22 @@ CarPaint::CarPaint(boost::shared_ptr<Texture<SWCSpectrum> > &kd,
 	boost::shared_ptr<Texture<float> > &m1,
 	boost::shared_ptr<Texture<float> > &m2,
 	boost::shared_ptr<Texture<float> > &m3,
-	const ParamSet &mp) : Material(mp),
+	const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : Material(mp),
 	Kd(kd), Ka(ka), Ks1(ks1), Ks2(ks2), Ks3(ks3), depth(d), R1(r1), R2(r2),
 	R3(r3), M1(m1), M2(m2), M3(m3)
 {
+	Sc = sc;
 }
 
 // CarPaint Method Definitions
 BSDF *CarPaint::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const Intersection &isect, const DifferentialGeometry &dgs) const
 {
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 	// Allocate _BSDF_
 	MultiBSDF<4> *bsdf = ARENA_ALLOC(arena, MultiBSDF<4>)(dgs, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor, bscale);
 
 	// The Carpaint BRDF is really a Multi-lobe Microfacet model with a Lambertian base
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
@@ -181,7 +184,7 @@ Material* CarPaint::CreateMaterial(const Transform &xform, const ParamSet &mp)
 	def_m[2] = carpaintdata[0].m3;
 
 	string paintname = mp.FindOneString("name", "");
-
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 	boost::shared_ptr<Texture<SWCSpectrum> > Ka(mp.GetSWCSpectrumTexture("Ka", RGBColor(0.f)));
 	boost::shared_ptr<Texture<float> > d(mp.GetFloatTexture("d", 0.f));
 
@@ -226,7 +229,7 @@ Material* CarPaint::CreateMaterial(const Transform &xform, const ParamSet &mp)
 		// Pick from presets, fall back to the first if name not found
 		DataFromName(paintname, &Kd, &Ks1, &Ks2, &Ks3, &R1, &R2, &R3, &M1, &M2, &M3);
 
-	return new CarPaint(Kd, Ka, d, Ks1, Ks2, Ks3, R1, R2, R3, M1, M2, M3, mp);
+	return new CarPaint(Kd, Ka, d, Ks1, Ks2, Ks3, R1, R2, R3, M1, M2, M3, mp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<CarPaint> r("carpaint");

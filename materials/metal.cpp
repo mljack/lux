@@ -33,7 +33,7 @@
 #include "dynload.h"
 #include "filedata.h"
 #include "error.h"
-
+#include "color.h"
 #include "irregular.h"
 
 #include <boost/lexical_cast.hpp>
@@ -45,8 +45,9 @@ using namespace lux;
 Metal::Metal(boost::shared_ptr<SPD > &n, boost::shared_ptr<SPD > &k, 
 	boost::shared_ptr<Texture<float> > &u,
 	boost::shared_ptr<Texture<float> > &v,
-	const ParamSet &mp) : Material(mp), N(n), K(k), nu(u), nv(v)
+	const ParamSet &mp, boost::shared_ptr<Texture<SWCSpectrum> > &sc) : Material(mp), N(n), K(k), nu(u), nv(v)
 {
+	Sc = sc;
 }
 
 BSDF *Metal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
@@ -55,6 +56,8 @@ BSDF *Metal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	// Allocate _BSDF_
 	SWCSpectrum n(sw, *N);
 	SWCSpectrum k(sw, *K);
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 
 	float u = nu->Evaluate(sw, dgs);
 	float v = nv->Evaluate(sw, dgs);
@@ -68,7 +71,7 @@ BSDF *Metal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	MicrofacetReflection *bxdf = ARENA_ALLOC(arena, MicrofacetReflection)(1.f,
 		fresnel, md);
 	SingleBSDF *bsdf = ARENA_ALLOC(arena, SingleBSDF)(dgs,
-		isect.dg.nn, bxdf, isect.exterior, isect.interior);
+		isect.dg.nn, bxdf, isect.exterior, isect.interior, bcolor, bscale);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(&compParams);
@@ -361,6 +364,7 @@ Material *Metal::CreateMaterial(const Transform &xform, const ParamSet &tp) {
 	//FIXME: "name" is deprecated in favor of "filename"
 	// keep it until v0.8 until the exporters have fully transitioned
 	string metalname = AdjustFilename(tp.FindOneString("filename", tp.FindOneString("name", "")));
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc(tp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
 
 	if (metalname == "")
 		metalname = DEFAULT_METAL;
@@ -390,7 +394,7 @@ Material *Metal::CreateMaterial(const Transform &xform, const ParamSet &tp) {
 	boost::shared_ptr<Texture<float> > uroughness(tp.GetFloatTexture("uroughness", .1f));
 	boost::shared_ptr<Texture<float> > vroughness(tp.GetFloatTexture("vroughness", .1f));
 
-	return new Metal(n, k, uroughness, vroughness, tp);
+	return new Metal(n, k, uroughness, vroughness, tp, Sc);
 }
 
 static DynamicLoader::RegisterMaterial<Metal> r("metal");
