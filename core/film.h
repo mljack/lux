@@ -100,7 +100,6 @@ struct FloatPixel {
 	float V, weightSum;
 };
 
-
 class Buffer {
 public:
 	Buffer(u_int x, u_int y) : pixels(x, y) {
@@ -423,7 +422,69 @@ private:
 	boost::mutex m_mutex;
 };
 
-// SamplePoint
+//------------------------------------------------------------------------------
+// Used to compute variance
+//------------------------------------------------------------------------------
+
+struct VariancePixel {
+	VariancePixel() : Sn(0.f), mean(0.f), weightSum(0.f) { }
+
+	float Sn, mean, weightSum;
+};
+
+class VarianceBuffer {
+public:
+	VarianceBuffer(u_int x, u_int y) : pixels(x, y) {
+	}
+
+	~VarianceBuffer() { }
+
+	void Add(u_int x, u_int y, XYZColor L, float wt) {
+		if (wt == 0.f)
+			return;
+
+		VariancePixel &pixel = pixels(x, y);
+
+		const float v = L.Y();
+		const float newWeightSum = pixel.weightSum + wt;
+
+		// Incremental computation of weighted mean:
+		// mean_n = mean_n-1 + (weight_n / weightSum_n)(x_n − mean_n−1 )
+		const float newMean = pixel.mean + (wt / newWeightSum) * (v - pixel.mean);
+
+		// Incremental computation of weighted variance:
+		//  S_n = S_n−1 + weight_n (x_n − mean_n−1)(x_n − mean_n)
+		//  Var = S_n / weightSum_n
+		const float newSn = pixel.Sn + wt * (v - pixel.mean) * (v - newMean);
+
+		pixel.Sn = newSn;
+		pixel.mean = newMean;
+		pixel.weightSum = newWeightSum;
+	}
+
+	void Clear() {
+		for (u_int y = 0; y < pixels.vSize(); ++y) {
+			for (u_int x = 0; x < pixels.uSize(); ++x) {
+				VariancePixel &pixel = pixels(x, y);
+				pixel.Sn = 0.f;
+				pixel.mean = 0.f;
+				pixel.weightSum = 0.f;
+			}
+		}
+	}
+
+	float GetVariance(u_int x, u_int y) const {
+		const VariancePixel &pixel = pixels(x, y);
+
+		// Var = S_n / weightSum_n
+		if (pixel.weightSum > 0.f)
+			return fabs(pixel.Sn / pixel.weightSum);
+		else
+			return -1.f; // -1 means a pixel that have yet to be sampled
+	}
+
+	BlockedArray<VariancePixel> pixels;
+};
 
 //------------------------------------------------------------------------------
 // Filter Look Up Table
@@ -539,7 +600,7 @@ public:
 	Film(u_int xres, u_int yres, Filter *filt, u_int filtRes, const float crop[4],
 		const string &filename1, bool premult, bool useZbuffer,
 		bool w_resume_FLM, bool restart_resume_FLM, bool write_FLM_direct,
-		int haltspp, int halttime, bool debugmode, int outlierk, int tilecount);
+		int haltspp, int halttime, float haltthreshold, bool debugmode, int outlierk, int tilecount);
 
 	virtual ~Film();
 
@@ -555,7 +616,8 @@ public:
 	 * @param num_contribs Number of contributions in the contribs array
 	 * @param tileIndex Index of the tile the contributions should be added to
 	 */
-	virtual void AddTileSamples(const Contribution* const contribs, u_int num_contribs, u_int tileIndex);
+	virtual void AddTileSamples(const Contribution* const contribs, u_int num_contribs,
+		u_int tileIndex);
 	virtual void SetSample(const Contribution *contrib);
 	virtual void AddSampleCount(float count);
 	virtual void SaveEXR(const string &exrFilename, bool useHalfFloats, bool includeZBuf, int compressionType, bool tonemapped) {
@@ -623,6 +685,13 @@ public:
 	virtual void SetStringParameterValue(luxComponentParameters param, const string& value, u_int index) = 0;
 	virtual string GetStringParameterValue(luxComponentParameters param, u_int index) = 0;
 
+	virtual const bool GetNoiseAwareMap(u_int &version, float *map) const;
+	virtual const bool HasUserSamplingMap() const { return (userSamplingMap != NULL); }
+	virtual const bool GetUserSamplingMap(u_int &version, float *map) const;
+	// Return noise-aware * user-sampling maps
+	virtual const bool GetSamplingMap(u_int &naVersion,  u_int &usVersion, float *map) const;
+	virtual void SetUserSamplingMap(const float *map);
+
 	/*
 	 * Accessor for samplePerPass
 	 * It is only used by SPPM and may disappears once the Buffer API allows for
@@ -641,6 +710,8 @@ protected:
 	void RejectTileOutliers(const Contribution &contrib, u_int tileIndex, int yTilePixelStart, int yTilePixelEnd);
 	// Gets the extents of a tile, interval is [start, end).
 	void GetTileExtent(u_int tileIndex, int *xstart, int *xend, int *ystart, int *yend) const;
+	void UpdateConvergenceInfo(const float *framebuffer);
+	void GenerateNoiseAwareMap();
 
 public:
 	// Film Public Data
@@ -688,6 +759,20 @@ protected: // Put it here for better data alignment
 
 	std::vector<BufferConfig> bufferConfigs;
 	std::vector<BufferGroup> bufferGroups;
+
+	float *convergenceReference;
+	vector<bool> convergenceDiff;
+	float *convergenceTVI;
+	VarianceBuffer *varianceBuffer;
+
+	float *noiseAwareMap;
+	u_int noiseAwareMapVersion;
+	boost::mutex noiseAwareMapMutex;
+
+	float *userSamplingMap;
+	u_int userSamplingMapVersion;
+	boost::mutex userSamplingMapMutex;
+
 	PerPixelNormalizedFloatBuffer *ZBuffer;
 	bool use_Zbuf;
 
@@ -713,6 +798,9 @@ public:
 	int haltSamplesPerPixel;
 	// Seconds to wait before to stop. Any value <= 0 will never stop the rendering
 	int haltTime;
+	// Convergence threshold to reach before to stop the rendering
+	float haltThreshold;
+	float haltThresholdComplete;
 
 	Histogram *histogram;
 	bool enoughSamplesPerPixel; // At the end to get better data alignment

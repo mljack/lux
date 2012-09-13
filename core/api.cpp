@@ -1256,3 +1256,7 @@ extern "C" const char* luxMagnitudePrefix(double number) {
 	return MagnitudePrefix(number);
 }
 
+extern "C" void luxSetUserSamplingMap(const float *map)
+{
+	Context::GetActive()->SetUserSamplingMap(map);
+}
