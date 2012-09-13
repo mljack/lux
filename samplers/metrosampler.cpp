@@ -25,8 +25,10 @@
 // metrosampler.cpp*
 #include "metrosampler.h"
 #include "memory.h"
+#include "mcdistribution.h"
 #include "scene.h"
 #include "dynload.h"
+#include "timer.h"
 
 using namespace lux;
 
@@ -37,6 +39,7 @@ static const u_int rngA = 884;
 MetropolisSampler::MetropolisData::MetropolisData(const MetropolisSampler &sampler) :
 	consecRejects(0), large(true), stamp(0), currentStamp(0), weight(0.f),
 	LY(0.f), alpha(0.f), totalLY(0.f), sampleCount(0.f),
+	samplingMap(NULL), noiseAwareMapVersion(0), userSamplingMapVersion(0),
 	cooldown(sampler.cooldownTime > 0)
 {
 	u_int i;
@@ -77,6 +80,7 @@ MetropolisSampler::MetropolisData::MetropolisData(const MetropolisSampler &sampl
 	// Allocate memory for the Cranley-Paterson rotation vector
 	rngRotation = AllocAligned<float>(totalSamples);
 }
+
 MetropolisSampler::MetropolisData::~MetropolisData()
 {
 	FreeAligned(rngRotation);
@@ -86,6 +90,7 @@ MetropolisSampler::MetropolisData::~MetropolisData()
 	FreeAligned(sampleImage);
 	delete[] timeOffset;
 	delete[] offset;
+	delete[] samplingMap;
 }
 
 // mutate a value in the range [0-1]
@@ -129,9 +134,10 @@ static float fracf(const float &v) {
 
 // Metropolis method definitions
 MetropolisSampler::MetropolisSampler(int xStart, int xEnd, int yStart, int yEnd,
-	u_int maxRej, float largeProb, float rng, bool useV, bool useC) :
+	u_int maxRej, float largeProb, float rng, bool useV, bool useC, bool useNoise) :
 	Sampler(xStart, xEnd, yStart, yEnd, 1), maxRejects(maxRej),
-	pLarge(largeProb), range(rng), useVariance(useV)
+	pLarge(largeProb), range(rng),
+	useVariance(useV), useNoiseAware(useNoise)
 {
 	// Allocate and compute all values of the rng
 	rngSamples = AllocAligned<float>(rngN);
@@ -148,9 +154,8 @@ MetropolisSampler::MetropolisSampler(int xStart, int xEnd, int yStart, int yEnd,
 	if (useC) {
 		cooldownTime = max<u_int>(1U, (xPixelEnd - xPixelStart) * (yPixelEnd - yPixelStart) * pLarge);
 		LOG(LUX_INFO, LUX_NOERROR) << "Metropolis cooldown during first " << cooldownTime << " samples";
-	} else {
+	} else
 		cooldownTime = 0;
-	}
 }
 
 MetropolisSampler::~MetropolisSampler() {
@@ -179,6 +184,35 @@ bool MetropolisSampler::GetNextSample(Sample *sample)
 			data->rngRotation[i] = sample->rng->floatValue();
 	}
 	if (data->large) {
+		if (useNoiseAware || film->HasUserSamplingMap()) {
+			// Noise-aware and/or User Sampling support
+			const u_int nPix = film->GetXPixelCount() * film->GetYPixelCount();
+			if (!data->samplingMap)
+				data->samplingMap = new float[nPix];
+
+			bool newSamplingMap = false;
+			if (useNoiseAware) {
+				// Check if there is a new version of the noise map and/or user-sampling map
+				newSamplingMap = film->GetSamplingMap(data->noiseAwareMapVersion, data->userSamplingMapVersion, data->samplingMap);
+			} else
+				newSamplingMap = film->GetUserSamplingMap(data->userSamplingMapVersion, data->samplingMap);
+
+			if (newSamplingMap) {
+				// There is a new version so reset some data
+
+				float newTotal = 0.f;
+				for (u_int i = 0; i < nPix; ++i)
+					newTotal += data->samplingMap[i];
+				newTotal /= nPix;
+
+				// NOTE: totalLY store the average target function value (this is usually not known but in this case, it is)
+				data->totalLY = newTotal;
+				data->sampleCount = 0.f;
+				data->consecRejects = 0;
+				data->LY = 0.f;
+			}
+		}
+
 		// *** large mutation ***
 		// Initialize all non lazy samples
 		data->currentImage[0] = rngGet(0) * (xPixelEnd - xPixelStart) + xPixelStart;
@@ -293,23 +327,42 @@ void MetropolisSampler::AddSample(const Sample &sample)
 {
 	MetropolisData *data = (MetropolisData *)(sample.samplerData);
 	vector<Contribution> &newContributions(sample.contributions);
+	float meanIntensity;
 	float newLY = 0.f;
-	for(u_int i = 0; i < newContributions.size(); ++i) {
-		const float ly = newContributions[i].color.Y();
-		if (ly > 0.f && !isinf(ly)) {
-			if (useVariance && newContributions[i].variance > 0.f)
-				newLY += ly * newContributions[i].variance;
-			else
-				newLY += ly;
-		} else
-			newContributions[i].color = XYZColor(0.f);
+	if (data->samplingMap && ((data->noiseAwareMapVersion > 0) || (data->userSamplingMapVersion > 0))) {
+		const int xPixelCount = film->GetXPixelCount();
+		const int xSize = xPixelCount - 1;
+		const int ySize = film->GetYPixelCount() - 1;
+
+		for(u_int i = 0; i < newContributions.size(); ++i) {
+			const int x = min(max(Ceil2Int(newContributions[i].imageX - .5f), 0), xSize);
+			const int y = min(max(Ceil2Int(newContributions[i].imageY - .5f), 0), ySize);
+
+			newLY += data->samplingMap[x + y * xPixelCount];
+		}
+
+		meanIntensity = data->totalLY > 0. ? data->totalLY : 1.f;
+	} else {
+		for(u_int i = 0; i < newContributions.size(); ++i) {
+			const float ly = newContributions[i].color.Y();
+			if (ly > 0.f && !isinf(ly)) {
+				if (useVariance && newContributions[i].variance > 0.f)
+					newLY += ly * newContributions[i].variance;
+				else
+					newLY += ly;
+			} else
+				newContributions[i].color = XYZColor(0.f);
+		}
+		
+		// Calculate meanIntensity. Required only for standard metropolis, it
+		// is a known quantity when noise-aware is enabled
+		if (data->large) {
+			data->totalLY += newLY;
+			++(data->sampleCount);
+		}
+
+		meanIntensity = data->totalLY > 0. ? static_cast<float>(data->totalLY / data->sampleCount) : 1.f;
 	}
-	// calculate meanIntensity
-	if (data->large) {
-		data->totalLY += newLY;
-		++(data->sampleCount);
-	}
-	const float meanIntensity = data->totalLY > 0. ? static_cast<float>(data->totalLY / data->sampleCount) : 1.f;
 
 	sample.contribBuffer->AddSampleCount(1.f);
 
@@ -351,6 +404,7 @@ void MetropolisSampler::AddSample(const Sample &sample)
 		++(data->consecRejects);
 	}
 	newContributions.clear();
+
 	const float mutationSelector = sample.rng->floatValue();
 	if (data->cooldown) {
 		if (data->sampleCount >= cooldownTime) {
@@ -369,12 +423,13 @@ Sampler* MetropolisSampler::CreateSampler(const ParamSet &params, const Film *fi
 	film->GetSampleExtent(&xStart, &xEnd, &yStart, &yEnd);
 	int maxConsecRejects = params.FindOneInt("maxconsecrejects", 512);	// number of consecutive rejects before a next mutation is forced
 	float largeMutationProb = params.FindOneFloat("largemutationprob", 0.4f);	// probability of generating a large sample mutation
-	float range = params.FindOneFloat("mutationrange", (xEnd - xStart + yEnd - yStart) / 32.f);	// maximum distance in pixel for a small mutation
 	bool useVariance = params.FindOneBool("usevariance", false);
 	bool useCooldown = params.FindOneBool("usecooldown", true);
+	bool useNoiseAware = params.FindOneBool("noiseaware", false);
+	float range = params.FindOneFloat("mutationrange", (xEnd - xStart + yEnd - yStart) / 32.f);	// maximum distance in pixel for a small mutation
 
 	return new MetropolisSampler(xStart, xEnd, yStart, yEnd, max(maxConsecRejects, 0),
-		largeMutationProb, range, useVariance, useCooldown);
+		largeMutationProb, range, useVariance, useCooldown, useNoiseAware);
 }
 
 static DynamicLoader::RegisterSampler<MetropolisSampler> r("metropolis");

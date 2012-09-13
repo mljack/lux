@@ -54,14 +54,14 @@ FlexImageFilm::FlexImageFilm(u_int xres, u_int yres, Filter *filt, u_int filtRes
 	bool cw_EXR_gamutclamp, bool cw_EXR_ZBuf, ZBufNormalization cw_EXR_ZBuf_normalizationtype, bool cw_EXR_straight_colors,
 	bool cw_PNG, OutputChannels cw_PNG_channels, bool cw_PNG_16bit, bool cw_PNG_gamutclamp, bool cw_PNG_ZBuf, ZBufNormalization cw_PNG_ZBuf_normalizationtype,
 	bool cw_TGA, OutputChannels cw_TGA_channels, bool cw_TGA_gamutclamp, bool cw_TGA_ZBuf, ZBufNormalization cw_TGA_ZBuf_normalizationtype, 
-	bool w_resume_FLM, bool restart_resume_FLM, bool write_FLM_direct, int haltspp, int halttime,
+	bool w_resume_FLM, bool restart_resume_FLM, bool write_FLM_direct, int haltspp, int halttime, float haltthreshold,
 	int p_TonemapKernel, float p_ReinhardPreScale, float p_ReinhardPostScale,
 	float p_ReinhardBurn, float p_LinearSensitivity, float p_LinearExposure, float p_LinearFStop, float p_LinearGamma,
 	float p_ContrastYwa, const string &p_response, float p_Gamma,
 	const float cs_red[2], const float cs_green[2], const float cs_blue[2], const float whitepoint[2],
 	bool debugmode, int outlierk, int tilec) :
 	Film(xres, yres, filt, filtRes, crop, filename1, premult, cw_EXR_ZBuf || cw_PNG_ZBuf || cw_TGA_ZBuf, w_resume_FLM, 
-		restart_resume_FLM, write_FLM_direct, haltspp, halttime, debugmode, outlierk, tilec), 
+		restart_resume_FLM, write_FLM_direct, haltspp, halttime, haltthreshold, debugmode, outlierk, tilec), 
 	framebuffer(NULL), float_framebuffer(NULL), alpha_buffer(NULL), z_buffer(NULL),
 	writeInterval(wI), flmWriteInterval(fwI), displayInterval(dI)
 {
@@ -995,7 +995,7 @@ void FlexImageFilm::WriteImage2(ImageType type, vector<XYZColor> &xyzcolor, vect
 				WriteTGAImage(rgbcolor, alpha, filename + postfix + ".tga");
 			if ((type & IMAGE_FILEOUTPUT) && write_PNG)
 				WritePNGImage(rgbcolor, alpha, filename + postfix + ".png");
-			
+
 			// Copy to framebuffer pixels
 			if ((type & IMAGE_FRAMEBUFFER) && framebuffer) {
 				u_int i = 0;
@@ -1005,10 +1005,108 @@ void FlexImageFilm::WriteImage2(ImageType type, vector<XYZColor> &xyzcolor, vect
 						framebuffer[offset] = static_cast<unsigned char>(Clamp(256 * rgbcolor[i].c[0], 0.f, 255.f));
 						framebuffer[offset + 1] = static_cast<unsigned char>(Clamp(256 * rgbcolor[i].c[1], 0.f, 255.f));
 						framebuffer[offset + 2] = static_cast<unsigned char>(Clamp(256 * rgbcolor[i].c[2], 0.f, 255.f));
+
+						// Some debug code used to show the convergence map
+						/*if (convergenceDiff.size() > 0)
+							framebuffer[3 * i] = framebuffer[3 * i + 1] = framebuffer[3 * i + 2] = convergenceDiff[i] ? 255 : 0;
+						else
+							framebuffer[3 * i] = framebuffer[3 * i + 1] = framebuffer[3 * i + 2] = 0;*/
+
 						++i;
 					}
 				}
+
+				// Some debug code used to show noise-aware map
+				/*for (u_int i = 0; i < nPix; i++) {
+					framebuffer[3 * i] = framebuffer[3 * i + 1] = framebuffer[3 * i + 2] =
+						static_cast<unsigned char>(Clamp(256.f *
+						noiseAwareMap[i],
+						0.f, 255.f));
+				}*/
+
+				// Some debug code used to show user-sampling map
+				/*for (u_int i = 0; i < nPix; i++) {
+					framebuffer[3 * i] = framebuffer[3 * i + 1] = framebuffer[3 * i + 2] =
+						static_cast<unsigned char>(Clamp(256.f *
+						userSamplingMap[i] * noiseAwareMap[i],
+						0.f, 255.f));
+				}*/
+
+				// Some debug code used to show the variance
+				/*float maxv = 0.f;
+				for (u_int i = 0; i < nPix; i++) {
+					const float v = varianceBuffer->GetVariance(i % xPixelCount, i / xPixelCount);
+					maxv = max(maxv, v);
+				}
+				const float invMaxV = 1.f / maxv;
+				for (u_int i = 0; i < nPix; i++) {
+					framebuffer[3 * i] = framebuffer[3 * i + 1] = framebuffer[3 * i + 2] =
+						static_cast<unsigned char>(Clamp(invMaxV * 256.f *
+						varianceBuffer->GetVariance(i % xPixelCount, i / xPixelCount),
+						0.f, 255.f));
+				}*/
+
+				// Some debug code used to show the tvi
+				/*if (convergenceTVI) {
+					float maxv = 0.f;
+					for (u_int i = 0; i < nPix; i++)
+						maxv = max(maxv, convergenceTVI[i]);
+
+					const float invMaxV = 1.f / maxv;
+					for (u_int i = 0; i < nPix; i++) {
+						framebuffer[3 * i] = framebuffer[3 * i + 1] = framebuffer[3 * i + 2] =
+							static_cast<unsigned char>(Clamp(invMaxV * 256.f *
+							convergenceTVI[i],
+							0.f, 255.f));
+					}
+				}*/
+
+				// Some debug code used to show the pixel sample counts
+				// Remember to replace also the sample weight in film.cpp form:
+				//  buffer->Add(xPixel, yPixel, xyz, alpha, w);
+				// to
+				//  buffer->Add(xPixel, yPixel, xyz, alpha, filterWt);
+				/*float maxSampleCount = 0.f;
+				for (u_int p = 0; p < nPix; p++) {
+					// Merge all buffer results
+					float sampleCount = 0.f;
+					for(u_int j = 0; j < bufferGroups.size(); ++j) {
+						if (!bufferGroups[j].enable)
+							continue;
+
+						for(u_int i = 0; i < bufferConfigs.size(); ++i) {
+							const Buffer &buffer = *(bufferGroups[j].buffers[i]);
+							if (!(bufferConfigs[i].output & BUF_FRAMEBUFFER))
+								continue;
+
+							sampleCount += buffer.pixels(p % xPixelCount, p / xPixelCount).weightSum;
+						}
+					}
+
+					maxSampleCount = max(maxSampleCount, sampleCount);
+				}
+				const float invMaxV = 1.f / maxSampleCount;
+				for (u_int p = 0; p < nPix; p++) {
+					// Merge all buffer results
+					float sampleCount = 0.f;
+					for(u_int j = 0; j < bufferGroups.size(); ++j) {
+						if (!bufferGroups[j].enable)
+							continue;
+
+						for(u_int i = 0; i < bufferConfigs.size(); ++i) {
+							const Buffer &buffer = *(bufferGroups[j].buffers[i]);
+							if (!(bufferConfigs[i].output & BUF_FRAMEBUFFER))
+								continue;
+
+							sampleCount += buffer.pixels(p % xPixelCount, p / xPixelCount).weightSum;
+						}
+					}
+
+					framebuffer[3 * p] = framebuffer[3 * p + 1] = framebuffer[3 * p + 2] = 
+							static_cast<unsigned char>(Clamp(256.f * sampleCount * invMaxV, 0.f, 255.f));
+				}*/
 			}
+
 			if ((type & IMAGE_FRAMEBUFFER) && float_framebuffer) {
 				u_int i = 0;
 				for (u_int y = yPixelStart; y < yPixelStart + yPixelCount; ++y) {
@@ -1125,6 +1223,12 @@ void FlexImageFilm::WriteImage(ImageType type)
 	// where L is the luminance, S is the ISO speed and K is a constant
 	// usually S is taken to be 100 and K to be 12.5
 	EV = logf(Y * 8.f) / logf(2.f);
+
+	// Update convergence information if required
+	if ((haltThreshold >= 0.f) && (type & IMAGE_FRAMEBUFFER) && float_framebuffer) {
+		// The framebuffer has been update
+		UpdateConvergenceInfo(float_framebuffer);
+	}
 
 	// release pool lock before writing output
 	poolLock.unlock();
@@ -1562,6 +1666,7 @@ Film* FlexImageFilm::CreateFilm(const ParamSet &params, Filter *filter)
 
 	const int haltspp = params.FindOneInt("haltspp", -1);
 	const int halttime = params.FindOneInt("halttime", -1);
+	const float haltthreshold = params.FindOneFloat("haltthreshold", -1.f);
 
 	// Color space primaries and white point
 	// default is SMPTE
@@ -1611,7 +1716,7 @@ Film* FlexImageFilm::CreateFilm(const ParamSet &params, Filter *filter)
 		w_EXR, w_EXR_channels, w_EXR_halftype, w_EXR_compressiontype, w_EXR_applyimaging, w_EXR_gamutclamp, w_EXR_ZBuf, w_EXR_ZBuf_normalizationtype, w_EXR_straightcolors,
 		w_PNG, w_PNG_channels, w_PNG_16bit, w_PNG_gamutclamp, w_PNG_ZBuf, w_PNG_ZBuf_normalizationtype,
 		w_TGA, w_TGA_channels, w_TGA_gamutclamp, w_TGA_ZBuf, w_TGA_ZBuf_normalizationtype, 
-		w_resume_FLM, restart_resume_FLM, w_FLM_direct, haltspp, halttime,
+		w_resume_FLM, restart_resume_FLM, w_FLM_direct, haltspp, halttime, haltthreshold,
 		s_TonemapKernel, s_ReinhardPreScale, s_ReinhardPostScale, s_ReinhardBurn, s_LinearSensitivity,
 		s_LinearExposure, s_LinearFStop, s_LinearGamma, s_ContrastYwa, response, s_Gamma,
 		red, green, blue, white, debug_mode, outlierrejection_k, tilecount);
