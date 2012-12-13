@@ -910,6 +910,10 @@ Film::Film(u_int xres, u_int yres, Filter *filt, u_int filtRes, const float crop
 	AddBoolAttribute(*this, "writeResumeFlm", "Write resume file", writeResumeFlm, &Film::writeResumeFlm, Queryable::ReadWriteAccess);
 	AddBoolAttribute(*this, "restartResumeFlm", "Restart (overwrite) resume file", restartResumeFlm, &Film::restartResumeFlm, Queryable::ReadWriteAccess);
 	AddBoolAttribute(*this, "writeFlmDirect", "Write resume file directly to disk", writeFlmDirect, &Film::writeFlmDirect, Queryable::ReadWriteAccess);	
+	AddFloatAttribute(*this, "cropWindow.0", "Crop window 0", &Film::GetCropWindow0);
+	AddFloatAttribute(*this, "cropWindow.1", "Crop window 1", &Film::GetCropWindow1);
+	AddFloatAttribute(*this, "cropWindow.2", "Crop window 2", &Film::GetCropWindow2);
+	AddFloatAttribute(*this, "cropWindow.3", "Crop window 3", &Film::GetCropWindow3);
 
 	// Precompute filter tables
 	filterLUTs = new FilterLUTs(filt, max(min(filtRes, 64u), 2u));
@@ -1217,7 +1221,7 @@ void Film::GetSampleExtent(int *xstart, int *xend,
 	*yend   = Floor2Int(yPixelStart + .5f + yPixelCount + filter->yWidth);
 }
 
-void Film::AddSampleCount(float count) {
+void Film::AddSampleCount(const float count) {
 	if (haltTime > 0) {
 		// Check if we have met the enough rendering time condition
 		boost::xtime t;
@@ -1515,7 +1519,7 @@ void Film::SetSample(const Contribution *contrib) {
 	BufferGroup &currentGroup = bufferGroups[contrib->bufferGroup];
 	Buffer *buffer = currentGroup.getBuffer(contrib->buffer);
 
-	buffer->Set(x - xPixelStart, y - yPixelStart, xyz, alpha);
+	buffer->Set(x - xPixelStart, y - yPixelStart, xyz, alpha, weight);
 
 	// Update ZBuffer values with filtered zdepth contribution
 	if(use_Zbuf && contrib->zdepth != 0.f)

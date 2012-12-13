@@ -56,6 +56,13 @@ public:
 	Vector  sundir;
 	float 	turbidity;
 	RegularSPD *model[10];
+
+private:
+	// Used by Queryable interface
+	float GetDirectionX() { return sundir.x; }
+	float GetDirectionY() { return sundir.y; }
+	float GetDirectionZ() { return sundir.z; }
+
 };
 
 }//namespace lux

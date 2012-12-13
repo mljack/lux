@@ -66,8 +66,9 @@ public:
 
 	Point pos;
 	float Apixel, xStart, xEnd, yStart, yEnd;
+
 private:
-	Normal normal;
+	Normal normal, up;
 	float fov;
 	float posPdf;
 	int distribution, shape, power;
