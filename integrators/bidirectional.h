@@ -137,16 +137,22 @@ class BidirIntegrator : public SurfaceIntegrator {
 public:
 	BidirIntegrator(u_int ed, u_int ld, float et, float lt,
 		LightsSamplingStrategy *lds, LightsSamplingStrategy *lps,
-		bool mis, bool d) : SurfaceIntegrator(),
+		bool mis, bool d, float sr, float a, u_int lpc) : SurfaceIntegrator(),
 		maxEyeDepth(ed), maxLightDepth(ld),
 		eyeThreshold(et), lightThreshold(lt),
 		lightDirectStrategy(lds), lightPathStrategy(lps),
-		hybridUseMIS(mis), debug(d) {
+		hybridUseMIS(mis), debug(d),
+		startRadius(sr), alpha(a), lightPathCount(lpc) {
 		directSamplingCount = 0;
 		pathSamplingCount = 0;
 		eyeBufferId = 0;
 		lightBufferId = 0;
 		AddStringConstant(*this, "name", "Name of current surface integrator", "bidirectional");
+		AddIntAttribute(*this, "maxEyeDepth", "Eye path max. depth", &BidirIntegrator::GetMaxEyeDepth);
+		AddIntAttribute(*this, "maxLightDepth", "Light path max. depth", &BidirIntegrator::GetMaxLightDepth);
+		AddFloatAttribute(*this, "startRadius", "Initial start radius", &BidirIntegrator::GetStartRadius);
+		AddFloatAttribute(*this, "alpha", "Start radius reduction amount", &BidirIntegrator::GetAlpha);
+		AddIntAttribute(*this, "lightPathCount", "Light path count", &BidirIntegrator::GetLightPathCount);
 	}
 	virtual ~BidirIntegrator() { }
 	// BidirIntegrator Public Methods
@@ -179,13 +185,20 @@ public:
 
 	friend class BidirPathState;
 
-	u_int maxEyeDepth, maxLightDepth;
-	float eyeThreshold, lightThreshold;
+	u_int maxEyeDepth, maxLightDepth, lightPathCount;
+	float eyeThreshold, lightThreshold, startRadius, alpha;
 	u_int sampleEyeOffset;
 	u_int eyeBufferId, lightBufferId;
 	vector<u_int> sampleLightOffsets;
 
 private:
+	// Used by Queryable interface
+	u_int GetMaxEyeDepth() { return maxEyeDepth; }
+	u_int GetMaxLightDepth() { return maxLightDepth; }
+	float GetStartRadius() { return startRadius; }
+	float GetAlpha() { return alpha; }
+	u_int GetLightPathCount() { return lightPathCount; }
+
 	/**
 	 * Compute the weight of the given path for MIS.
 	 * @param eye The eye path

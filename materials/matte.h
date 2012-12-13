@@ -33,12 +33,15 @@ public:
 	// Matte Public Methods
 	Matte(boost::shared_ptr<Texture<SWCSpectrum> > &kd,
 		boost::shared_ptr<Texture<float> > &sig,
-		const ParamSet &mp) : Material(mp), Kd(kd), sigma(sig) { }
+		const ParamSet &mp) : Material("Matte-" + boost::lexical_cast<string>(this), mp),
+			Kd(kd), sigma(sig) { }
 	virtual ~Matte() { }
 	virtual BSDF *GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 		const Intersection &isect,
 		const DifferentialGeometry &dgShading) const;
-	              
+
+	Texture<SWCSpectrum> *GetTexture() { return Kd.get(); }
+
 	static Material * CreateMaterial(const Transform &xform,
 		const ParamSet &mp);
 private:

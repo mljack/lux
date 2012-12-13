@@ -60,11 +60,19 @@ public:
 		const ParamSet &paramSet);
 
 private:
+	// Used by Queryable interface
+	float GetDirectionX() { return dir.x; }
+	float GetDirectionY() { return dir.y; }
+	float GetDirectionZ() { return dir.z; }
+
+	// Creation parameters
+	Vector dir;
+	float turbidity, relSize, gain;
+	
 	// SunLight Private Data
 	Vector sundir;
 	// XY Vectors for cone sampling
 	Vector x, y;
-	float turbidity;
 	float thetaS, phiS, V;
 	float cosThetaMax, sin2ThetaMax;
 	SPD *LSPD;

@@ -55,6 +55,11 @@ public:
 		const ParamSet &paramSet);
 
 private:
+	// Used by Queryable interface
+	float GetDirectionX() { return sundir.x; }
+	float GetDirectionY() { return sundir.y; }
+	float GetDirectionZ() { return sundir.z; }
+
 	// internal methods
 	Vector GetSunPosition() const;
 	void SunThetaPhi(float &theta, float &phi) const;

@@ -24,6 +24,7 @@
 ##########################      Find LuxRays       ##########################
 #############################################################################
 #############################################################################
+
 IF(APPLE)
 	FIND_PATH(LUXRAYS_INCLUDE_DIRS NAMES luxrays/luxrays.h PATHS ${OSX_DEPENDENCY_ROOT}/include/LuxRays)
 	FIND_LIBRARY(LUXRAYS_LIBRARY libluxrays.a ${OSX_DEPENDENCY_ROOT}/lib/LuxRays)
@@ -43,6 +44,29 @@ ENDIF (LUXRAYS_INCLUDE_DIRS AND LUXRAYS_LIBRARY)
 
 #############################################################################
 #############################################################################
+##########################        Find SLG         ##########################
+#############################################################################
+#############################################################################
+
+IF(APPLE)
+	FIND_PATH(SLG_INCLUDE_DIRS NAMES slg.h PATHS ${OSX_DEPENDENCY_ROOT})
+	FIND_LIBRARY(SLG_LIBRARY libsmallluxgpu3.a ${OSX_DEPENDENCY_ROOT}/lib/LuxRays)
+ELSE(APPLE)
+	FIND_PATH(SLG_INCLUDE_DIRS NAMES slg.h PATHS ../luxrays/include ${LuxRays_HOME}/samples/smallluxgpu3 )
+	FIND_LIBRARY(SLG_LIBRARY smallluxgpu3 PATHS ../luxrays/lib ${LuxRays_HOME}/lib PATH_SUFFIXES "" release relwithdebinfo minsizerel dist )
+ENDIF(APPLE)
+
+IF (SLG_INCLUDE_DIRS AND SLG_LIBRARY)
+	MESSAGE(STATUS "SLG include directory: " ${SLG_INCLUDE_DIRS})
+	MESSAGE(STATUS "SLG library directory: " ${SLG_LIBRARY})
+	INCLUDE_DIRECTORIES(SYSTEM ${SLG_INCLUDE_DIRS})
+ELSE (SLG_INCLUDE_DIRS AND SLG_LIBRARY)
+	MESSAGE(FATAL_ERROR "SLG not found.")
+ENDIF (SLG_INCLUDE_DIRS AND SLG_LIBRARY)
+
+
+#############################################################################
+#############################################################################
 ###########################      Find OpenCL       ##########################
 #############################################################################
 #############################################################################
@@ -58,7 +82,7 @@ ELSE(LUXRAYS_DISABLE_OPENCL)
 	IF (OPENCL_FOUND)
 		MESSAGE(STATUS "OpenCL include directory: " ${OPENCL_INCLUDE_DIR})
 		MESSAGE(STATUS "OpenCL library: " ${OPENCL_LIBRARIES})
-#		INCLUDE_DIRECTORIES(SYSTEM ${OPENCL_INCLUDE_DIR})
+		INCLUDE_DIRECTORIES(SYSTEM ${OPENCL_INCLUDE_DIR})
 	ELSE (OPENCL_FOUND)
 		MESSAGE(FATAL_ERROR "OpenCL not found, try to compile with LUXRAYS_DISABLE_OPENCL=ON")
 	ENDIF (OPENCL_FOUND)
