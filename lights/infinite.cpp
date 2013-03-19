@@ -228,8 +228,8 @@ InfiniteAreaLight::~InfiniteAreaLight()
 
 InfiniteAreaLight::InfiniteAreaLight(const Transform &light2world,
 	const RGBColor &l, u_int ns, const string &texmap,
-	EnvironmentMapping *m, float g, float gm)
-	: Light("InfiniteAreaLight-" + boost::lexical_cast<string>(this), light2world, ns), SPDbase(l)
+	EnvironmentMapping *m, float g, float gm, bool sup)
+	: Light("InfiniteAreaLight-" + boost::lexical_cast<string>(this), light2world, ns, sup), SPDbase(l)
 {
 	lightColor = l;
 	gain = g;
@@ -534,6 +534,7 @@ Light* InfiniteAreaLight::CreateLight(const Transform &light2world,
 	RGBColor L = paramSet.FindOneRGBColor("L", RGBColor(1.0));
 	string texmap = paramSet.FindOneString("mapname", "");
 	int nSamples = paramSet.FindOneInt("nsamples", 1);
+	bool sup = paramSet.FindOneBool("support", false);
 
 	EnvironmentMapping *map = NULL;
 	string type = paramSet.FindOneString("mapping", "");
@@ -547,7 +548,7 @@ Light* InfiniteAreaLight::CreateLight(const Transform &light2world,
 	float gain = paramSet.FindOneFloat("gain", 1.0f);
 	float gamma = paramSet.FindOneFloat("gamma", 1.0f);
 
-	InfiniteAreaLight *l =  new InfiniteAreaLight(light2world, L, nSamples, texmap, map, gain, gamma);
+	InfiniteAreaLight *l =  new InfiniteAreaLight(light2world, L, nSamples, texmap, map, gain, gamma, sup);
 	l->hints.InitParam(paramSet);
 	return l;
 }

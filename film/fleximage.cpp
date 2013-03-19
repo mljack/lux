@@ -40,6 +40,7 @@
 #include "osfunc.h"
 #include "dynload.h"
 #include "filedata.h"
+#include "imagereader.h"
 #include "contribution.h"
 
 #include <boost/thread/xtime.hpp>
@@ -49,7 +50,7 @@ using namespace lux;
 
 // FlexImageFilm Method Definitions
 FlexImageFilm::FlexImageFilm(u_int xres, u_int yres, Filter *filt, u_int filtRes, const float crop[4],
-	const string &filename1, bool premult, int wI, int fwI, int dI, int cM,
+	const string &filename1, const string &filename_back, bool premult, int wI, int fwI, int dI, int cM,
 	bool cw_EXR, OutputChannels cw_EXR_channels, bool cw_EXR_halftype, int cw_EXR_compressiontype, bool cw_EXR_applyimaging,
 	bool cw_EXR_gamutclamp, bool cw_EXR_ZBuf, ZBufNormalization cw_EXR_ZBuf_normalizationtype, bool cw_EXR_straight_colors,
 	bool cw_PNG, OutputChannels cw_PNG_channels, bool cw_PNG_16bit, bool cw_PNG_gamutclamp, bool cw_PNG_ZBuf, ZBufNormalization cw_PNG_ZBuf_normalizationtype,
@@ -195,6 +196,28 @@ FlexImageFilm::FlexImageFilm(u_int xres, u_int yres, Filter *filt, u_int filtRes
 	// init timer
 	boost::xtime_get(&lastWriteImageTime, boost::TIME_UTC_);
 	lastWriteFLMTime = lastWriteImageTime;
+
+	if (filename_back != "")  {
+		std::auto_ptr<ImageData> imgdata(ReadImage(filename_back));
+		if (imgdata.get() != NULL && imgdata->getPixelDataType() == 2){
+			int nu = imgdata->getWidth();
+			int nv = imgdata->getHeight();
+			back = new XYZColor[nu*nv];
+			TextureColor<float, 3u > *ret = static_cast<TextureColor<float, 3u >*>(imgdata->getData());
+
+			for ( int i = 0 ; i < nu*nv ; i++ )
+				back[i] = colorSpace.ToXYZ(RGBColor(ret[i].c));
+
+			premultiplyAlpha = true;
+		}
+		else {
+			back = NULL;
+			LOG(LUX_WARNING, LUX_LIMIT) << "Cannot Load Background image " << filename_back << ". Works only with HDR formats.";
+		}
+	}
+	else
+		back = NULL;
+
 }
 
 void FlexImageFilm::CreateBuffers() {
@@ -1261,8 +1284,13 @@ void FlexImageFilm::WriteImage(ImageType type)
 				pcount++;
 			}
 			alpha_buffer[offset] = alpha[pix];
+			if(back != NULL) {
+				pixels[pix] = back[pix]*(1.f-alpha[pix])+pixels[pix];
+				alpha[pix] = 1.f;
+			}
 			++pix;
 		}
+
 	}
 	if (pcount > 0) {
 		Y /= pcount;
@@ -1751,6 +1779,8 @@ Film* FlexImageFilm::CreateFilm(const ParamSet &params, Filter *filter)
 	// output filenames
 	string filename = params.FindOneString("filename", "luxout");
 	filename = boost::filesystem::path(filename).string();
+	// background filenames
+	string filename_back = params.FindOneString("background", "");
 
 	// intervals
 	int writeInterval = params.FindOneInt("writeinterval", 60);
@@ -1816,9 +1846,9 @@ Film* FlexImageFilm::CreateFilm(const ParamSet &params, Filter *filter)
 
 	int tilecount = params.FindOneInt("tilecount", 0);
 
-	return new FlexImageFilm(xres, yres, filter, filtRes, crop,
-		filename, premultiplyAlpha, writeInterval, flmWriteInterval, displayInterval, clampMethod, 
-		w_EXR, w_EXR_channels, w_EXR_halftype, w_EXR_compressiontype, w_EXR_applyimaging, w_EXR_gamutclamp, w_EXR_ZBuf, w_EXR_ZBuf_normalizationtype, w_EXR_straightcolors,
+	return new FlexImageFilm(xres, yres, filter, filtRes, crop, filename, filename_back,
+		premultiplyAlpha, writeInterval, flmWriteInterval, displayInterval, clampMethod, w_EXR, w_EXR_channels, 
+		w_EXR_halftype, w_EXR_compressiontype, w_EXR_applyimaging, w_EXR_gamutclamp, w_EXR_ZBuf, w_EXR_ZBuf_normalizationtype, w_EXR_straightcolors,
 		w_PNG, w_PNG_channels, w_PNG_16bit, w_PNG_gamutclamp, w_PNG_ZBuf, w_PNG_ZBuf_normalizationtype,
 		w_TGA, w_TGA_channels, w_TGA_gamutclamp, w_TGA_ZBuf, w_TGA_ZBuf_normalizationtype, 
 		w_resume_FLM, restart_resume_FLM, w_FLM_direct, haltspp, halttime, haltthreshold,

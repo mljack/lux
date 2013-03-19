@@ -180,7 +180,8 @@ public:
 	 * @param interior The volume on the opposite side
 	 */
 	BSDF(const DifferentialGeometry &dgs, const Normal &ngeom,
-		const Volume *exterior, const Volume *interior);
+		const Volume *exterior, const Volume *interior, 
+		const SWCSpectrum Bcolor = SWCSpectrum(0.f), const float Bscale = 1.f );
 	/**
 	 * The number of BxDF composing the BSDF
 	 */
@@ -332,6 +333,11 @@ public:
 	virtual SWCSpectrum rho(const SpectrumWavelengths &sw, const Vector &wW,
 		BxDFType flags = BSDF_ALL) const = 0;
 
+	virtual SWCSpectrum GetBcolor() const;
+
+	virtual SWCSpectrum ScaledBcolor() const;
+
+	virtual float GetBscale() const;
 	/**
 	 * Apply a transformation to the BSDF
 	 * This is useful for light instances.
@@ -360,7 +366,8 @@ public:
 	 * @brief The volume in the opposite half space
 	 */
 	const Volume *exterior, *interior;
-
+	const SWCSpectrum Bcolor;
+	const float Bscale;
 	const CompositingParams *compParams; /** Compositing parameters pointer */
 	
 protected:

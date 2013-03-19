@@ -105,8 +105,8 @@ protected:
 
 // SunLight Method Definitions
 SunLight::SunLight(const Transform &light2world, const float sunscale,
-	const Vector &lightDir, float turb , float relS, u_int ns)
-	: Light("SunLight-" + boost::lexical_cast<string>(this), light2world, ns) {
+	const Vector &lightDir, float turb , float relS, u_int ns, bool sup)
+	: Light("SunLight-" + boost::lexical_cast<string>(this), light2world, ns, sup) {
 	dir = lightDir;
 	turbidity = turb;
 	relSize = relS;
@@ -365,6 +365,7 @@ bool SunLight::SampleL(const Scene &scene, const Sample &sample,
 Light* SunLight::CreateLight(const Transform &light2world,
 	const ParamSet &paramSet)
 {
+	bool sup = paramSet.FindOneBool("support", false);
 	//NOTE - Ratow - Added relsize param and reactivated nsamples
 	float scale = paramSet.FindOneFloat("gain", 1.f);				// gain (aka scale) factor to apply to sun/skylight (0.005)
 	int nSamples = paramSet.FindOneInt("nsamples", 1);
@@ -372,7 +373,7 @@ Light* SunLight::CreateLight(const Transform &light2world,
 	float turb = paramSet.FindOneFloat("turbidity", 2.0f);				// [in] turb  Turbidity (1.0,30+) 2-6 are most useful for clear days.
 	float relSize = paramSet.FindOneFloat("relsize", 1.0f);				// relative size to the sun. Set to 0 for old behavior.
 
-	SunLight *l = new SunLight(light2world, scale, sundir, turb, relSize, nSamples);
+	SunLight *l = new SunLight(light2world, scale, sundir, turb, relSize, nSamples, sup);
 	l->hints.InitParam(paramSet);
 	return l;
 }

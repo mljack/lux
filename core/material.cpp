@@ -22,6 +22,7 @@
 
 // material.cpp*
 #include "material.h"
+#include "color.h"
 #include "shape.h"
 #include "texture.h"
 #include "paramset.h"
@@ -36,6 +37,8 @@ Material::Material(const string &name, const ParamSet &mp, bool hasBumpMap) : Qu
 		boost::shared_ptr<Texture<float> > bump(mp.GetFloatTexture("bumpmap"));
 		bumpMap = bump;
 	}
+	boost::shared_ptr<Texture<SWCSpectrum> > sc(mp.GetSWCSpectrumTexture("Sc", RGBColor(.9f)));
+	Sc = sc;
 	compParams.tVm = mp.FindOneBool("compo_visible_material", true);
 	compParams.tVl = mp.FindOneBool("compo_visible_emission", true);
 	compParams.tiVm = mp.FindOneBool("compo_visible_indirect_material", true);

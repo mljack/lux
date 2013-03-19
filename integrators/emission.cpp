@@ -86,6 +86,14 @@ u_int EmissionIntegrator::Li(const Scene &scene, const Ray &ray,
 	return group;
 }
 
+u_int EmissionIntegrator::Li(const Scene &scene, const Ray &ray,
+	const Sample &sample, SWCSpectrum *Lv, float *alpha, bool from_IsSup, bool path_type) const
+{
+	if(!from_IsSup)
+		return Li(scene, ray, sample, Lv, alpha);
+	else {	*Lv = 0.f; return 0;}
+}
+
 bool EmissionIntegrator::Intersect(const Scene &scene, const Sample &sample,
 	const Volume *volume, bool scatteredStart, const Ray &ray, float u,
 	Intersection *isect, BSDF **bsdf, float *pdf, float *pdfBack,

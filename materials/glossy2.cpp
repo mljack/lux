@@ -47,6 +47,8 @@ BSDF *GlossyCombined::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 {
 	// Allocate _BSDF_
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 	SWCSpectrum d(Kd->Evaluate(sw, dgs).Clamp(0.f, 1.f));
 	SWCSpectrum s(Ks->Evaluate(sw, dgs));
 	float i = index->Evaluate(sw, dgs);
@@ -68,7 +70,7 @@ BSDF *GlossyCombined::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const float anisotropy = u2 < v2 ? 1.f - u2 / v2 : v2 / u2 - 1.f;
 	SingleBSDF *bsdf = ARENA_ALLOC(arena, SingleBSDF)(dgs,
 		isect.dg.nn, ARENA_ALLOC(arena, SchlickBRDF)(d, s, a, ld, u * v,
-		anisotropy, multibounce), isect.exterior, isect.interior);
+		anisotropy, multibounce), isect.exterior, isect.interior, bcolor, bscale);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(&compParams);
@@ -149,7 +151,8 @@ BSDF *GlossyCoating::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	DifferentialGeometry dgShading = dgs;
 	basemat->GetShadingGeometry(sw, isect.dg.nn, &dgShading);
 	BSDF *base = basemat->GetBSDF(arena, sw, isect, dgShading);
-
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 	// Allocate _BSDF_
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
 	SWCSpectrum s(Ks->Evaluate(sw, dgs));
@@ -175,7 +178,7 @@ BSDF *GlossyCoating::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	MicrofacetDistribution* md = ARENA_ALLOC(arena, SchlickDistribution)(u * v, anisotropy);
 
 	SchlickBSDF *bsdf = ARENA_ALLOC(arena, SchlickBSDF)(dgs, isect.dg.nn, fresnel, md, multibounce, 
-		a, ld, base, isect.exterior, isect.interior);
+		a, ld, base, isect.exterior, isect.interior, bcolor, bscale);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(&compParams);

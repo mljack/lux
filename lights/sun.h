@@ -34,7 +34,7 @@ class SunLight : public Light {
 public:
 	// SunLight Public Methods
 	SunLight(const Transform &light2world, const float sunscale,
-		const Vector &dir, float turb, float relSize, u_int ns);
+		const Vector &dir, float turb, float relSize, u_int ns, bool sup);
 	virtual ~SunLight() { delete LSPD; }
 	virtual bool IsDeltaLight() const { return cosThetaMax == 1.0; }
 	virtual bool IsEnvironmental() const { return true; }
@@ -60,6 +60,7 @@ public:
 		const ParamSet &paramSet);
 
 private:
+
 	// Used by Queryable interface
 	float GetDirectionX() { return dir.x; }
 	float GetDirectionY() { return dir.y; }
