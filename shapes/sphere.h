@@ -35,8 +35,8 @@ public:
 	       float rad, float zmin, float zmax, float phiMax);
 	virtual ~Sphere() { }
 	virtual BBox ObjectBound() const;
-	virtual bool Intersect(const Ray &ray, Intersection *isect) const;
-	virtual bool IntersectP(const Ray &ray) const;
+	virtual bool Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect = false) const;
+	virtual bool IntersectP(const Ray &ray, bool null_shp_isect = false) const;
 	virtual float Area() const;
 	virtual float Sample(float u1, float u2, float u3,
 		DifferentialGeometry *dg) const {

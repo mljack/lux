@@ -48,10 +48,10 @@ public:
 		Region *vr);
 	Scene(Camera *c);
 	~Scene();
-	bool Intersect(const Ray &ray, Intersection *isect) const {
-		return aggregate->Intersect(ray, isect);
+	bool Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect = false) const {
+		return aggregate->Intersect(ray, isect, null_shp_isect);
 	}
-	bool Intersect(const luxrays::RayHit &rayHit, Intersection *isect) const {
+	bool Intersect(const luxrays::RayHit &rayHit, Intersection *isect, bool null_shp_isect = false) const {
 		if (rayHit.Miss())
 			return false;
 		else {
@@ -60,7 +60,7 @@ public:
 			const unsigned int currentPrimIndex = dataSet->GetMeshID(currentTriangleIndex);
 			const unsigned int triIndex = dataSet->GetMeshTriangleID(currentTriangleIndex);
 
-			tessellatedPrimitives[currentPrimIndex]->GetIntersection(rayHit, triIndex, isect);
+			tessellatedPrimitives[currentPrimIndex]->GetIntersection(rayHit, triIndex, isect, null_shp_isect);
 
 			return true;
 		}
@@ -68,38 +68,39 @@ public:
 	bool Intersect(const Sample &sample, const Volume *volume,
 		bool scatteredStart, const Ray &ray, float u,
 		Intersection *isect, BSDF **bsdf, float *pdf, float *pdfBack,
-		SWCSpectrum *f) const {
+		SWCSpectrum *f, bool null_shp_isect = false) const {
 		return volumeIntegrator->Intersect(*this, sample, volume,
-			scatteredStart, ray, u, isect, bsdf, pdf, pdfBack, f);
+			scatteredStart, ray, u, isect, bsdf, pdf, pdfBack, f, null_shp_isect);
 	}
 	// Used to complete intersection data with LuxRays
 	bool Intersect(const Sample &sample, const Volume *volume,
 		bool scatteredStart, const Ray &ray,
 		const luxrays::RayHit &rayHit, float u, Intersection *isect,
-		BSDF **bsdf, float *pdf, float *pdfBack, SWCSpectrum *f) const {
+		BSDF **bsdf, float *pdf, float *pdfBack, SWCSpectrum *f, bool null_shp_isect = false) const {
 		return volumeIntegrator->Intersect(*this, sample, volume,
 			scatteredStart, ray, rayHit, u, isect, bsdf, pdf,
-			pdfBack, f);
+			pdfBack, f, null_shp_isect);
 	}
+
 	bool Connect(const Sample &sample, const Volume *volume,
 		bool scatteredStart, bool scatteredEnd, const Point &p0,
 		const Point &p1, bool clip, SWCSpectrum *f, float *pdf,
-		float *pdfR) const {
+		float *pdfR, bool null_shapes_isect = false) const {
 		return volumeIntegrator->Connect(*this, sample, volume,
 			scatteredStart, scatteredEnd, p0, p1, clip, f, pdf,
-			pdfR);
+			pdfR, null_shapes_isect);
 	}
 	// Used with LuxRays
 	int Connect(const Sample &sample, const Volume **volume,
 		bool scatteredStart, bool scatteredEnd, const Ray &ray,
 		const luxrays::RayHit &rayHit, SWCSpectrum *f, float *pdf,
-		float *pdfR) const {
+		float *pdfR, bool null_shapes_isect = false) const {
 		return volumeIntegrator->Connect(*this, sample, volume,
 			scatteredStart, scatteredEnd, ray, rayHit, f, pdf,
-			pdfR);
+			pdfR, null_shapes_isect);
 	}
-	bool IntersectP(const Ray &ray) const {
-		return aggregate->IntersectP(ray);
+	bool IntersectP(const Ray &ray, bool null_shp_isect = false) const {
+		return aggregate->IntersectP(ray, null_shp_isect);
 	}
 	const BBox &WorldBound() const { return bound; }
 	SWCSpectrum Li(const Ray &ray, const Sample &sample,
@@ -108,6 +109,7 @@ public:
 	void Transmittance(const Ray &ray, const Sample &sample,
 		SWCSpectrum *const L) const;
 
+	void arlux_setup(void);
 	//framebuffer access
 	void UpdateFramebuffer();
 	unsigned char* GetFramebuffer();

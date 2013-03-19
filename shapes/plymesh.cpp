@@ -85,6 +85,33 @@ static int NormalCB(p_ply_argument argument)
 	return 1;
 }
 
+static int WorldTextureCB(p_ply_argument argument)
+{
+	long userIndex = 0;
+	void *userData = NULL;
+	ply_get_argument_user_data(argument, &userData, &userIndex);
+
+	Point* wuv = *static_cast<Point **>(userData);
+
+	long vertIndex;
+	ply_get_argument_element(argument, NULL, &vertIndex);
+
+	if (userIndex == 0)
+		wuv[vertIndex].x =
+			static_cast<float>(ply_get_argument_value(argument));
+	else if (userIndex == 1)
+		wuv[vertIndex].y =
+			static_cast<float>(ply_get_argument_value(argument));
+	else if (userIndex == 2)
+		wuv[vertIndex].z =
+			static_cast<float>(ply_get_argument_value(argument));
+/*	else
+		return 0;*/
+
+	return 1;
+}
+
+
 // rply st/uv callback
 static int TexCoordCB(p_ply_argument argument)
 {
@@ -187,6 +214,13 @@ Shape* PlyMesh::CreateShape(const Transform &o2w,
 		return NULL;
 	}
 
+	Point *wuv;
+	long plyWVerts = ply_set_read_cb(plyfile, "vertex", "px",
+		WorldTextureCB, &wuv, 0);
+	ply_set_read_cb(plyfile, "vertex", "py", WorldTextureCB, &wuv, 1);
+	ply_set_read_cb(plyfile, "vertex", "pz", WorldTextureCB, &wuv, 2);
+
+
 	FaceData faceData;
 	long plyNbFaces = ply_set_read_cb(plyfile, "face", "vertex_indices",
 		FaceCB, &faceData, 0);
@@ -217,6 +251,11 @@ Shape* PlyMesh::CreateShape(const Transform &o2w,
 	// TODO: add the support for reading vertex colors
 
 	p = new Point[plyNbVerts];
+	if (plyWVerts <= 0)
+		wuv = NULL;
+	else
+		wuv = new Point[plyWVerts];
+
 	if (plyNbNormals <= 0)
 		n = NULL;
 	else
@@ -227,9 +266,11 @@ Shape* PlyMesh::CreateShape(const Transform &o2w,
 	else
 		uv = new float[2*plyNbUVs];
 
+
 	if (!ply_read(plyfile)) {
 		SHAPE_LOG(name, LUX_ERROR,LUX_SYSTEM) << "Unable to parse PLY file '" << filename << "'";
 		delete[] p;
+		delete[] wuv;
 		delete[] n;
 		delete[] uv;
 		return NULL;
@@ -322,6 +363,14 @@ Shape* PlyMesh::CreateShape(const Transform &o2w,
 		}
 	}
 
+	if (plyNbVerts != plyWVerts) {
+		if (wuv) {
+			SHAPE_LOG(name, LUX_ERROR,LUX_CONSISTENCY)<< "Incorrect number of world texture coordinates";
+			delete[] wuv;
+			wuv = NULL;
+		}
+	}
+
 	const int *triVerts = plyNbTris > 0 ? &faceData.triVerts[0] : NULL;
 	const int *quadVerts = plyNbQuads > 0 ? &faceData.quadVerts[0] : NULL;
 
@@ -360,17 +409,32 @@ Shape* PlyMesh::CreateShape(const Transform &o2w,
 	}
 
 	bool genTangents = params.FindOneBool("generatetangents", false);
+	string  type = params.FindOneString( "type", "native" );
+
+	ShapeType shpType;
+
+	if (type == "native")
+		shpType = ShapeType(LUX_SHAPE);
+	else if (type == "support")
+		shpType = ShapeType(AR_SHAPE);
+	else if (type == "environment")
+		shpType = ShapeType(ENV_SHAPE);
+
+
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", Point(0,0,0) );
 
 	boost::shared_ptr<Texture<float> > dummytex;
-	Mesh *mesh = new Mesh(o2w, reverseOrientation, name, Mesh::ACCEL_AUTO,
-		plyNbVerts, p, n, uv, NULL, NULL, Mesh::TRI_AUTO, plyNbTris, triVerts,
-		Mesh::QUAD_QUADRILATERAL, plyNbQuads, quadVerts, subdivType,
-		nsubdivlevels, displacementMap, displacementMapScale,
-		displacementMapOffset, displacementMapNormalSmooth,
-		displacementMapSharpBoundary, normalSplit, genTangents);
+	Mesh *mesh = new Mesh(o2w, reverseOrientation, name, shpType, proj_text, cam, Mesh::ACCEL_AUTO,
+			      plyNbVerts, p, n, uv, NULL, NULL, wuv, Mesh::TRI_AUTO, plyNbTris, triVerts,
+			      Mesh::QUAD_QUADRILATERAL, plyNbQuads, quadVerts, subdivType,
+			      nsubdivlevels, displacementMap, displacementMapScale,
+			      displacementMapOffset, displacementMapNormalSmooth,
+			      displacementMapSharpBoundary, normalSplit, genTangents);
 	delete[] p;
 	delete[] n;
 	delete[] uv;
+	delete[] wuv;
 	return mesh;
 }
 

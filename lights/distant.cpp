@@ -70,8 +70,8 @@ private:
 // DistantLight Method Definitions
 DistantLight::DistantLight(const Transform &light2world,
 	const boost::shared_ptr<Texture<SWCSpectrum> > &L, 
-	float g, float theta, const Vector &dir, u_int ns)
-	: Light("DistantLight-" + boost::lexical_cast<string>(this), light2world, ns),
+	float g, float theta, const Vector &dir, u_int ns, bool sup)
+	: Light("DistantLight-" + boost::lexical_cast<string>(this), light2world, ns, sup),
 	Lbase(L) {
 	lightDir = Normalize(LightToWorld * dir);
 	CoordinateSystem(lightDir, &x, &y);
@@ -272,8 +272,9 @@ Light* DistantLight::CreateLight(const Transform &light2world,
 	float theta = Radians(paramSet.FindOneFloat("theta", 0.f));
 	Point from = paramSet.FindOnePoint("from", Point(0, 0, 0));
 	Point to = paramSet.FindOnePoint("to", Point(0, 0, 1));
+	bool sup = paramSet.FindOneBool("support", false);
 	Vector dir = from - to;
-	DistantLight *l = new DistantLight(light2world, L, g, theta, dir, nSamples);
+	DistantLight *l = new DistantLight(light2world, L, g, theta, dir, nSamples, sup);
 	l->hints.InitParam(paramSet);
 	return l;
 }

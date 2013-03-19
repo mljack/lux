@@ -36,6 +36,7 @@ namespace lux
 // Shape Declarations
 class Shape : public Primitive {
 public:
+//	enum ShapeType { LUX_SHAPE, AR_SHAPE, ENV_SHAPE };
 	Shape(const Transform &o2w, bool ro, const string &name);
 	Shape(const Transform &o2w, bool ro,
 		boost::shared_ptr<Material> &material,
@@ -85,10 +86,15 @@ public:
 		}
 	}
 
+	virtual ShapeType GetPrimitiveType() const { return ShapeType(LUX_SHAPE); }
+	virtual Vector GetNormal(u_int i) const { return Vector(0.f); }
+	virtual Point GetPoint(u_int i) const { return Point(0.f); }
+	virtual float GetScale(u_int i) const { return 1.f; }
+	virtual bool SetScale(float scale, u_int i) const { return false; }
 	virtual bool CanIntersect() const { return true; }
-	virtual bool Intersect(const Ray &r, Intersection *isect) const {
+	virtual bool Intersect(const Ray &r, Intersection *isect, bool null_shp_isect = false ) const {
 		float thit;
-		if (!Intersect(r, &thit, &isect->dg))
+		if (!Intersect(r, &thit, &isect->dg, null_shp_isect))
 			return false;
 		isect->dg.AdjustNormal(reverseOrientation,
 			transformSwapsHandedness);
@@ -133,7 +139,7 @@ public:
 		LOG(LUX_SEVERE,LUX_BUG)<<"Unimplemented Shape::Refine() method called";
 	}
 	virtual bool Intersect(const Ray &ray, float *t_hitp,
-		DifferentialGeometry *dg) const {
+		DifferentialGeometry *dg, bool null_shp_isect = false ) const {
 		LOG(LUX_SEVERE,LUX_BUG)<<"Unimplemented Shape::Intersect() method called";
 		return false;
 	}
@@ -164,13 +170,14 @@ public:
 	virtual ~PrimitiveSet() { }
 
 	virtual BBox WorldBound() const { return worldbound; }
+	virtual ShapeType GetPrimitiveType() const { return ShapeType(LUX_SHAPE); }
 	virtual bool CanIntersect() const {
 		for (u_int i = 0; i < primitives.size(); ++i)
 			if (!primitives[i]->CanIntersect()) return false;
 		return true;
 	}
-	virtual bool Intersect(const Ray &r, Intersection *in) const;
-	virtual bool IntersectP(const Ray &r) const;
+	virtual bool Intersect(const Ray &r, Intersection *in, bool null_shp_isect = false ) const;
+	virtual bool IntersectP(const Ray &r, bool null_shp_isect = false ) const;
 
 	virtual bool CanSample() const {
 		for (u_int i = 0; i < primitives.size(); ++i)

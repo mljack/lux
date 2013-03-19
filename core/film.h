@@ -822,6 +822,7 @@ protected: // Put it here for better data alignment
 	// contains the outliers that lies on the overlap between tiles
 	std::vector<std::vector<OutlierAccel> > tileborder_outliers; 
 
+	XYZColor *back;
 public:
 	// Samplers will check this flag to know if we have enough samples per
 	// pixel and it is time to stop

@@ -28,14 +28,17 @@
 #include "texture.h"
 #include "paramset.h"
 #include "dynload.h"
+#include "color.h"
 
 using namespace lux;
 
 // MixMaterial Method Definitions
 BSDF *MixMaterial::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const Intersection &isect, const DifferentialGeometry &dgShading) const {
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgShading);
+	float bscale = dgShading.Scale;
 	MixBSDF *bsdf = ARENA_ALLOC(arena, MixBSDF)(dgShading, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor, bscale);
 	float amt = Clamp(amount->Evaluate(sw, dgShading), 0.f, 1.f);
 	DifferentialGeometry dgS = dgShading;
 	mat1->GetShadingGeometry(sw, isect.dg.nn, &dgS);

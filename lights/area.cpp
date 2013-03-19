@@ -178,6 +178,7 @@ AreaLight::AreaLight(const Transform &light2world,
 		else
 			prim = boost::shared_ptr<Primitive>(new PrimitiveSet(refinedPrims));
 	}
+	support = ( ShapeType(AR_SHAPE) == prim->GetPrimitiveType() );
 	area = prim->Area();
 	Le->SetIlluminant(); // Illuminant must be set before calling Le->Y()
 	const float gainFactor = power * efficacy /

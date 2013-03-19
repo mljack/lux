@@ -45,6 +45,7 @@ public:
 	Vector dpdu, dpdv;
 	float time;
 	bool scattered;
+	Point wuv;
 
 	PartialDifferentialGeometry() { scattered = false; }
 
@@ -54,11 +55,21 @@ public:
 			const Vector &DPDV);
 
 	PartialDifferentialGeometry(
+			const Point &P,
+			const Vector &DPDU,
+			const Vector &DPDV, const Point &WUV);
+
+	PartialDifferentialGeometry(
 		const Point &P,
 		const Normal &NN,
 		const Vector &DPDU,
 		const Vector &DPDV);
 
+	PartialDifferentialGeometry(
+		const Point &P,
+		const Normal &NN,
+		const Vector &DPDU,
+		const Vector &DPDV, const Point &WUV);
 	/**
 	 * Returns the volume defined by dpdu, dpdv and nn
 	 * @return The volume defined by dpdu, dpdv and nn
@@ -88,6 +99,12 @@ public:
 			float uu, float vv,
 			const Primitive *pr);
 	DifferentialGeometry(
+			const Point &P,
+			const Vector &DPDU,	const Vector &DPDV,
+			const Normal &DNDU, const Normal &DNDV,
+			float uu, float vv,
+			const Primitive *pr, float scale, const Point &WUV);
+	DifferentialGeometry(
 			const Point &P, const Normal &NN,
 			const Vector &DPDU,	const Vector &DPDV,
 			const Normal &DNDU, const Normal &DNDV,
@@ -97,9 +114,22 @@ public:
 			const Point &P, const Normal &NN,
 			const Vector &DPDU,	const Vector &DPDV,
 			const Normal &DNDU, const Normal &DNDV,
+			float uu, float vv,
+			const Primitive *pr, float scale, const Point &WUV);
+	DifferentialGeometry(
+			const Point &P, const Normal &NN,
+			const Vector &DPDU,	const Vector &DPDV,
+			const Normal &DNDU, const Normal &DNDV,
 			const Vector &T, const Vector &BiT, float BiTsign,
 			float uu, float vv,
 			const Primitive *pr);
+	DifferentialGeometry(
+			const Point &P, const Normal &NN,
+			const Vector &DPDU,	const Vector &DPDV,
+			const Normal &DNDU, const Normal &DNDV,
+			const Vector &T, const Vector &BiT, float BiTsign,
+			float uu, float vv,
+			const Primitive *pr, float scale, const Point &WUV);
 	void AdjustNormal(bool ro, bool swapsHandedness) {
 		// Adjust normal based on orientation and handedness
 		if (ro ^ swapsHandedness)
@@ -110,6 +140,8 @@ public:
 	Vector tangent, bitangent; // surface tangents, may be different to dpdu,dpdv but in same plane, not normalized
 	float btsign; // sign of the bitangent, actual bitangent is "bitangent * (btsign > 0.f ? 1.f : -1.f)"
 	float u, v;
+	mutable float Scale;
+
 	const Primitive *handle;
 	const Primitive *ihandle; // handle to intersected primitive, used with instances
 

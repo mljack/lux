@@ -61,6 +61,7 @@ public:
 	}
 
 	boost::shared_ptr<Texture<float> > bumpMap;
+	boost::shared_ptr<Texture<SWCSpectrum> > Sc;
 	float bumpmapSampleDistance;
 	CompositingParams compParams;
 };

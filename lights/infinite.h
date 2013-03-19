@@ -36,7 +36,7 @@ public:
 	// InfiniteAreaLight Public Methods
 	InfiniteAreaLight(const Transform &light2world, const RGBColor &l,
 		u_int ns, const string &texmap, EnvironmentMapping *m,
-		float gain, float gamma);
+		float gain, float gamma, bool sup);
 	virtual ~InfiniteAreaLight();
 	virtual float Power(const Scene &scene) const;
 	virtual bool IsDeltaLight() const { return false; }

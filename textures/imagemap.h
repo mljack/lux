@@ -40,9 +40,9 @@ namespace lux
 class TexInfo {
 public:
 	TexInfo(ImageTextureFilterType type, const string &f, int dm,
-		float ma, ImageWrap wm, float ga, float gam) :
+		float ma, ImageWrap wm, float ga, float gam, bool arscale = false) :
 		filterType(type), filename(f), discardmm(dm),
-		maxAniso(ma), wrapMode(wm), gain(ga), gamma(gam) { }
+		maxAniso(ma), wrapMode(wm), gain(ga), gamma(gam), ar_scale(arscale) { }
 
 	ImageTextureFilterType filterType;
 	string filename;
@@ -51,6 +51,7 @@ public:
 	ImageWrap wrapMode;
 	float gain;
 	float gamma;
+	bool ar_scale;
 
 	bool operator<(const TexInfo &t2) const {
 		if (filterType != t2.filterType)
@@ -65,7 +66,9 @@ public:
 			return wrapMode < t2.wrapMode;
 		if (gain != t2.gain)
 			return gain < t2.gain;
-		return gamma < t2.gamma;
+		if (gamma != t2.gamma)
+			return gamma < t2.gamma;
+		return ar_scale < t2.ar_scale;
 	}
 };
 
@@ -236,6 +239,8 @@ inline boost::shared_ptr<MIPMap> ImageTexture::GetTexture(const TexInfo &texInfo
 		return textures[texInfo];
 	}
 	std::auto_ptr<ImageData> imgdata(ReadImage(texInfo.filename));
+	if (texInfo.ar_scale)
+		imgdata->data_scale();
 	boost::shared_ptr<MIPMap> ret;
 	if (imgdata.get() != NULL) {
 		ret = boost::shared_ptr<MIPMap>(imgdata->createMIPMap(
