@@ -169,6 +169,7 @@ namespace luxrays {
 
 namespace lux
 {
+  enum ShapeType { LUX_SHAPE, AR_SHAPE, ENV_SHAPE };
   class ParamSet;
   template <class T> struct ParamSetItem;
   using luxrays::BBox;

@@ -31,7 +31,7 @@
 using namespace lux;
 
 // LoopSubdiv Method Definitions
-LoopSubdiv::LoopSubdiv(u_int nfaces, u_int nvertices, const int *vertexIndices,
+LoopSubdiv::LoopSubdiv(ShapeType shpType, bool proj, Point cam_, u_int nfaces, u_int nvertices, const int *vertexIndices,
 	const Point *P, const float *uv, const Normal *n, u_int nl,
 	const boost::shared_ptr<Texture<float> > &dismap, float dmscale,
 	float dmoffset, bool dmnormalsmooth, bool dmsharpboundary,
@@ -42,6 +42,19 @@ LoopSubdiv::LoopSubdiv(u_int nfaces, u_int nvertices, const int *vertexIndices,
 	displacementMapSharpBoundary(dmsharpboundary),
 	name(sname)
 {
+	shape_type = shpType;
+	proj_text = proj;
+	cam = cam_;
+
+	if ( shape_type == ShapeType(AR_SHAPE) ) {
+		proj_text = true;
+		Scale = new float[nvertices];
+		for (u_int i  = 0; i < nvertices; ++i)
+			Scale[i] = -1.f;
+	}
+	else
+		Scale = NULL;
+
 	nLevels = nl;
 	hasUV = (uv != NULL);
 	normalSplit = normalsplit && n != NULL;

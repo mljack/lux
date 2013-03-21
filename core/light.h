@@ -38,8 +38,8 @@ namespace lux
 class  Light : public Queryable {
 public:
 	// Light Interface
-	Light(const string &name, const Transform &l2w, u_int ns = 1U)
-		: Queryable(name), nSamples(max(1U, ns)), LightToWorld(l2w) {
+	Light(const string &name, const Transform &l2w, u_int ns = 1U, bool sup = false)
+		: Queryable(name), nSamples(max(1U, ns)), LightToWorld(l2w), support(sup) {
 		if (LightToWorld.HasScale())
 			LOG(LUX_DEBUG,LUX_UNIMPLEMENT)<< "Scaling detected in light-to-world transformation! Some lights might not support it yet.";
 		havePortalShape = false;
@@ -57,7 +57,14 @@ public:
 	virtual float Power(const Scene &scene) const = 0;
 	virtual bool IsDeltaLight() const = 0;
 	virtual bool IsEnvironmental() const = 0;
+	virtual bool IsSupport() const { return support; }
+	virtual float DirProb(Vector N, Point P = Point(0.f) ) const { return 1.f; }
+	virtual bool LeSupport(const Scene &scene, const Sample &sample,
+		const Point wr, SWCSpectrum *L) const { return false; }
 	virtual bool Le(const Scene &scene, const Sample &sample, const Ray &r,
+		BSDF **bsdf, float *pdf, float *pdfDirect,
+		SWCSpectrum *L) const { return false; }
+	virtual bool Le(const Scene &scene, const Sample &sample, const Point &p,
 		BSDF **bsdf, float *pdf, float *pdfDirect,
 		SWCSpectrum *L) const { return false; }
 	virtual float Pdf(const Point &p, const PartialDifferentialGeometry &dg) const = 0;
@@ -68,6 +75,10 @@ public:
 		const Point &p, float u1, float u2, float u3,
 		BSDF **bsdf, float *pdf, float *pdfDirect,
 		SWCSpectrum *L) const = 0;
+	virtual bool SampleL(const Scene &scene, const Sample &sample,
+		const Point &p, const Normal &n, float u1, float u2, float u3,
+		BSDF **bsdf, float *pdf, float *pdfDirect,
+		SWCSpectrum *L) const {return false;}
 	const LightRenderingHints *GetRenderingHints() const { return &hints; }
 
 	void AddPortalShape(boost::shared_ptr<Primitive> &shape);
@@ -78,6 +89,7 @@ public:
 	vector<boost::shared_ptr<Primitive> > PortalShapes;
 	float PortalArea;
 	u_int group;
+	bool support;
 protected:
 	// Light Protected Data
 	const Transform LightToWorld;
@@ -138,7 +150,14 @@ public:
 	virtual bool IsEnvironmental() const {
 		return light->IsEnvironmental();
 	}
+	virtual bool IsSupport() const { return light->IsSupport(); }
+	virtual float DirProb(Vector N, Point P = Point(0.f) ) const { return light->DirProb(N, P); }
+	virtual bool LeSupport(const Scene &scene, const Sample &sample,
+		const Point wr, SWCSpectrum *L) const { return light->LeSupport(scene, sample, wr, L); }
 	virtual bool Le(const Scene &scene, const Sample &sample, const Ray &r,
+		BSDF **bsdf, float *pdf, float *pdfDirect,
+		SWCSpectrum *L) const;
+	virtual bool Le(const Scene &scene, const Sample &sample, const Point &p,
 		BSDF **bsdf, float *pdf, float *pdfDirect,
 		SWCSpectrum *L) const;
 	virtual float Pdf(const Point &p, const PartialDifferentialGeometry &dg) const {
@@ -152,6 +171,10 @@ public:
 		SWCSpectrum *L) const;
 	virtual bool SampleL(const Scene &scene, const Sample &sample,
 		const Point &p, float u1, float u2, float u3,
+		BSDF **bsdf, float *pdf, float *pdfDirect,
+		SWCSpectrum *L) const;
+	virtual bool SampleL(const Scene &scene, const Sample &sample,
+		const Point &p, const Normal &n, float u1, float u2, float u3,
 		BSDF **bsdf, float *pdf, float *pdfDirect,
 		SWCSpectrum *L) const;
 
@@ -173,7 +196,14 @@ public:
 	virtual bool IsEnvironmental() const {
 		return light->IsEnvironmental();
 	}
+	virtual bool IsSupport() const { return light->IsSupport(); }
+	virtual float DirProb(Vector N, Point P = Point(0.f) ) const { return light->DirProb(N, P); }
+	virtual bool LeSupport(const Scene &scene, const Sample &sample,
+		const Point wr, SWCSpectrum *L) const { return light->LeSupport(scene, sample, wr, L); }
 	virtual bool Le(const Scene &scene, const Sample &sample, const Ray &r,
+		BSDF **bsdf, float *pdf, float *pdfDirect,
+		SWCSpectrum *L) const;
+	virtual bool Le(const Scene &scene, const Sample &sample, const Point &p,
 		BSDF **bsdf, float *pdf, float *pdfDirect,
 		SWCSpectrum *L) const;
 	virtual float Pdf(const Point &p, const PartialDifferentialGeometry &dg) const {
@@ -188,6 +218,10 @@ public:
 		SWCSpectrum *L) const;
 	virtual bool SampleL(const Scene &scene, const Sample &sample,
 		const Point &p, float u1, float u2, float u3,
+		BSDF **bsdf, float *pdf, float *pdfDirect,
+		SWCSpectrum *L) const;
+	virtual bool SampleL(const Scene &scene, const Sample &sample,
+		const Point &p, const Normal &n, float u1, float u2, float u3,
 		BSDF **bsdf, float *pdf, float *pdfDirect,
 		SWCSpectrum *L) const;
 

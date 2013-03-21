@@ -36,13 +36,30 @@ void Primitive::Refine(vector<boost::shared_ptr<Primitive> > &refined,
 	LOG( LUX_SEVERE,LUX_BUG)<< "Unimplemented Primitive::Refine method called!";
 }
 
-bool Primitive::Intersect(const Ray &r, Intersection *in) const
+Vector Primitive::GetNormal(u_int i) const
+{
+	LOG( LUX_SEVERE,LUX_BUG)<< "Unimplemented Primitive::GetNormal method called!";
+	return Vector(0.f);
+}
+
+Point Primitive::GetPoint(u_int i) const
+{
+	LOG( LUX_SEVERE,LUX_BUG)<< "Unimplemented Primitive::GetBaryPoint method called!";
+	return Point(0.f);
+}
+
+float Primitive::GetScale(u_int i) const
+{
+	return 1.f;
+}
+
+bool Primitive::Intersect(const Ray &r, Intersection *in, bool null_shp_isect) const
 {
 	LOG( LUX_SEVERE,LUX_BUG)<< "Unimplemented Primitive::Intersect method called!";
 	return false;
 }
 
-bool Primitive::IntersectP(const Ray &r) const
+bool Primitive::IntersectP(const Ray &r, bool null_shp_isect) const
 {
 	LOG( LUX_SEVERE,LUX_BUG)<< "Unimplemented Primitive::IntersectP method called!";
 	return false;
@@ -81,6 +98,7 @@ BSDF *Intersection::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	primitive->GetShadingGeometry(ObjectToWorld, dg,
 		&dgShading);
 	material->GetShadingGeometry(sw, dg.nn, &dgShading);
+
 	return material->GetBSDF(arena, sw, *this, dgShading);
 }
 
@@ -107,19 +125,19 @@ void AreaLightPrimitive::Refine(vector<boost::shared_ptr<Primitive> > &refined,
 	}
 }
 
-bool AreaLightPrimitive::Intersect(const Ray &r, Intersection *in) const
+bool AreaLightPrimitive::Intersect(const Ray &r, Intersection *in, bool null_shp_isect) const
 {
-	if (!prim->Intersect(r, in))
+	if (!prim->Intersect(r, in, null_shp_isect))
 		return false;
 	in->arealight = areaLight; // set the intersected arealight
 	return true;
 }
 
 // InstancePrimitive Method Definitions
-bool InstancePrimitive::Intersect(const Ray &r, Intersection *isect) const
+bool InstancePrimitive::Intersect(const Ray &r, Intersection *isect, bool null_shp_isect) const
 {
 	Ray ray(Inverse(InstanceToWorld) * r);
-	if (!instance->Intersect(ray, isect))
+	if (!instance->Intersect(ray, isect, null_shp_isect))
 		return false;
 	r.maxt = ray.maxt;
 	isect->ObjectToWorld = InstanceToWorld * isect->ObjectToWorld;
@@ -136,9 +154,9 @@ bool InstancePrimitive::Intersect(const Ray &r, Intersection *isect) const
 	return true;
 }
 
-bool InstancePrimitive::IntersectP(const Ray &r) const
+bool InstancePrimitive::IntersectP(const Ray &r, bool null_shp_isect) const
 {
-	return instance->IntersectP(Inverse(InstanceToWorld) * r);
+	return instance->IntersectP(Inverse(InstanceToWorld) * r, null_shp_isect);
 }
 
 void InstancePrimitive::GetShadingGeometry(const Transform &obj2world,
@@ -154,12 +172,12 @@ void InstancePrimitive::GetShadingGeometry(const Transform &obj2world,
 }
 
 // MotionPrimitive Method Definitions
-bool MotionPrimitive::Intersect(const Ray &r, Intersection *isect) const
+bool MotionPrimitive::Intersect(const Ray &r, Intersection *isect, bool null_shp_isect) const
 {
 	Transform InstanceToWorld = motionPath.Sample(r.time);
 
 	Ray ray(Inverse(InstanceToWorld) * r);
-	if (!instance->Intersect(ray, isect))
+	if (!instance->Intersect(ray, isect, null_shp_isect))
 		return false;
 	r.maxt = ray.maxt;
 	isect->ObjectToWorld = InstanceToWorld * isect->ObjectToWorld;
@@ -176,11 +194,11 @@ bool MotionPrimitive::Intersect(const Ray &r, Intersection *isect) const
 	return true;
 }
 
-bool MotionPrimitive::IntersectP(const Ray &r) const
+bool MotionPrimitive::IntersectP(const Ray &r, bool null_shp_isect) const
 {
 	Transform InstanceToWorld = motionPath.Sample(r.time);
 
-	return instance->IntersectP(Inverse(InstanceToWorld) * r);
+	return instance->IntersectP(Inverse(InstanceToWorld) * r, null_shp_isect);
 }
 void MotionPrimitive::GetShadingGeometry(const Transform &obj2world,
 	const DifferentialGeometry &dg, DifferentialGeometry *dgShading) const

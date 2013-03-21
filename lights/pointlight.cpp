@@ -139,8 +139,8 @@ protected:
 PointLight::PointLight(const Transform &light2world,
 	const boost::shared_ptr< Texture<SWCSpectrum> > &L,
 	float g, float power, float efficacy,
-	SampleableSphericalFunction *ssf) :
-	Light("PointLight-" + boost::lexical_cast<string>(this), light2world),
+	SampleableSphericalFunction *ssf, bool sup) :
+	Light("PointLight-" + boost::lexical_cast<string>(this), light2world, sup),
 	Lbase(L), gain(g), func(ssf)
 {
 	lightPos = LightToWorld * Point(0,0,0);
@@ -211,6 +211,7 @@ Light* PointLight::CreateLight(const Transform &light2world,
 	float g = paramSet.FindOneFloat("gain", 1.f);
 	float p = paramSet.FindOneFloat("power", 0.f);		// Power/Lm in Watts
 	float e = paramSet.FindOneFloat("efficacy", 0.f);	// Efficacy Lm per Watt
+	bool sup = paramSet.FindOneBool("support", false);
 
 	boost::shared_ptr<const SphericalFunction> sf(CreateSphericalFunction(paramSet));
 	SampleableSphericalFunction *ssf = NULL;
@@ -220,7 +221,7 @@ Light* PointLight::CreateLight(const Transform &light2world,
 	Point P = paramSet.FindOnePoint("from", Point(0,0,0));
 	Transform l2w = Translate(Vector(P.x, P.y, P.z)) * light2world;
 
-	PointLight *l = new PointLight(l2w, L, g, p, e, ssf);
+	PointLight *l = new PointLight(l2w, L, g, p, e, ssf, sup);
 	l->hints.InitParam(paramSet);
 	return l;
 }

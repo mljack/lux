@@ -50,6 +50,20 @@ Shape* StlMesh::CreateShape(const Transform &o2w,
 
 	bool recenterMesh = params.FindOneBool("recenter_mesh", false);
 
+
+	string  type = params.FindOneString( "type", "native" );
+
+	ShapeType shpType;
+	if (type == "native")
+		shpType = ShapeType(LUX_SHAPE);
+	else if (type == "support")
+		shpType = ShapeType(AR_SHAPE);
+	else if (type == "environment")
+		shpType = ShapeType(ENV_SHAPE);
+
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", (0,0,0) );
+
 	Mesh::MeshSubdivType subdivType;
 
 	if (subdivscheme == "loop")
@@ -247,8 +261,9 @@ Shape* StlMesh::CreateShape(const Transform &o2w,
 
 	boost::shared_ptr<Texture<float> > displacementMap;
 
-	return new Mesh(o2w, reverseOrientation, name, Mesh::ACCEL_AUTO,
-					Vertices.size(), &Vertices[0], NULL, NULL, NULL, NULL,
+
+	return new Mesh(o2w, reverseOrientation, name, shpType,  proj_text, cam, Mesh::ACCEL_AUTO,
+					Vertices.size(), &Vertices[0], NULL, NULL, NULL, NULL, NULL,
 					Mesh::TRI_AUTO, uNFaces, &Faces[0],
 					Mesh::QUAD_QUADRILATERAL, 0, NULL,
 					subdivType, nsubdivlevels, displacementMap, 0.1f, 0.0f, true, false,

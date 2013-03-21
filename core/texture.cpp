@@ -78,6 +78,16 @@ TextureMapping2D *TextureMapping2D::Create(const Transform &tex2world, const Par
 		float du = tp.FindOneFloat("udelta", 0.f);
 		float dv = tp.FindOneFloat("vdelta", 0.f);
 		return new UVMapping2D(su, sv, du, dv);
+	} else if (type == "projector"){
+		float su = tp.FindOneFloat("uscale", 1.f);
+		float sv = tp.FindOneFloat("vscale", 1.f);
+		float du = tp.FindOneFloat("udelta", 0.f);
+		float dv = tp.FindOneFloat("vdelta", 0.f);
+		Vector dir = tp.FindOneVector("dir", Vector(0,0,1));
+		Vector up = tp.FindOneVector("up", Vector(0,1,0));
+		float fov = tp.FindOneFloat("fov", 0.f);
+		float yox = tp.FindOneFloat("y/x", 0.f);
+		return new ProjectorMapping2D(su, sv, du, dv,dir, up, fov, yox);
 	} else if (type == "spherical") {
 		float su = tp.FindOneFloat("uscale", 1.f);
 		float sv = tp.FindOneFloat("vscale", 1.f);
@@ -112,6 +122,49 @@ void UVMapping2D::Map(const DifferentialGeometry &dg, float *s, float *t) const
 	*t = sv * dg.v + dv;
 }
 void UVMapping2D::MapDuv(const DifferentialGeometry &dg, float *s, float *t,
+	float *dsdu, float *dtdu, float *dsdv, float *dtdv) const
+{
+	Map(dg, s, t);
+	// Compute texture differentials for 2D identity mapping
+	*dsdu = su;
+	*dsdv = 0.f;
+	*dtdu = 0.f;
+	*dtdv = sv;
+}
+
+//Projection texture methods
+ProjectorMapping2D::ProjectorMapping2D(float _su, float _sv,
+	float _du, float _dv,   Vector sdir, Vector sup , float fov, float yox) 
+{
+	su = _su; sv = _sv;
+	du = _du; dv = _dv;
+	right = Normalize(Cross(sdir,sup));
+	up = Normalize(-sup);
+	dir = Normalize(sdir);
+
+	alfa = tan(fov/360.f*M_PI);
+	beta = tan(fov/360.f*M_PI)*yox;
+	r = 1.f; g = 1.f; b = 1.f;
+}
+void ProjectorMapping2D::Map(const DifferentialGeometry &dg,
+	float *s, float *t) const 
+{
+	Vector ray( sin(dg.v)*cos(dg.u), sin(dg.v)*sin(dg.u), cos(dg.v));
+
+	ray = Normalize(ray);
+
+	float a,b,c;
+	b = (Dot(dir, ray));
+
+	a = (Dot(right,ray));
+	c = (Dot(up,ray));
+	a = a / b;
+	c = c / b;
+
+	*s = su * (a+alfa)/(2.f*alfa) + du;
+	*t = sv * (c+beta)/(2.f*beta) + dv;
+}
+void ProjectorMapping2D::MapDuv(const DifferentialGeometry &dg, float *s, float *t,
 	float *dsdu, float *dtdu, float *dsdv, float *dtdv) const
 {
 	Map(dg, s, t);
