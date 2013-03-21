@@ -33,7 +33,7 @@
 #include "dynload.h"
 #include "filedata.h"
 #include "error.h"
-
+#include "color.h"
 #include "irregular.h"
 
 #include <boost/lexical_cast.hpp>
@@ -57,6 +57,8 @@ BSDF *Metal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	// Allocate _BSDF_
 	SWCSpectrum n(sw, *N);
 	SWCSpectrum k(sw, *K);
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 
 	float u = nu->Evaluate(sw, dgs);
 	float v = nv->Evaluate(sw, dgs);
@@ -70,7 +72,7 @@ BSDF *Metal::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	MicrofacetReflection *bxdf = ARENA_ALLOC(arena, MicrofacetReflection)(1.f,
 		fresnel, md);
 	SingleBSDF *bsdf = ARENA_ALLOC(arena, SingleBSDF)(dgs,
-		isect.dg.nn, bxdf, isect.exterior, isect.interior);
+		isect.dg.nn, bxdf, isect.exterior, isect.interior, bcolor, bscale);
 
 	// Add ptr to CompositingParams structure
 	bsdf->SetCompositingParams(&compParams);

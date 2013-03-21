@@ -24,6 +24,7 @@
 #include "error.h"
 #include "transport.h"
 #include "scene.h"
+#include "camera.h"
 #include "light.h"
 #include "mcdistribution.h"
 #include "bxdf.h"
@@ -474,4 +475,980 @@ u_int SurfaceIntegratorRenderingHints::SampleLights(const Scene &scene,
 	}
 
 	return nContribs;
+}
+
+// Sample Lights for Environment lights
+// Note: results are added to L and optional parameter V content
+u_int SurfaceIntegratorRenderingHints::EnvSampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, vector<float> *V) const
+{
+	if (nLights == 0)
+	return 0;
+
+	const float *data = sample.sampler->GetLazyValues(sample,
+	lightSampleOffset, depth);
+	u_int nContribs = 0;
+	// Use multiple importance sampling if the surface is not diffuse
+	const BxDFType noDiffuse = BxDFType(BSDF_ALL & ~(BSDF_DIFFUSE));
+	const bool mis = bsdf->NumComponents(noDiffuse) > 0;
+	if (mis) {
+		// Trace a second shadow ray by sampling the BSDF
+		Vector wi;
+		float bsdfPdf;
+		BxDFType sampledType;
+		SWCSpectrum Li, Lt(scale);
+		if (bsdf->SampleF(sample.swl, wo, &wi, data[0], data[1], data[2],
+			&Li, &bsdfPdf, BSDF_ALL, &sampledType, NULL, true) &&
+			!(sampledType & BSDF_SPECULAR)) {
+			Lt *= Li;
+			// Add light contribution from BSDF sampling
+			Intersection lightIsect;
+			Ray ray(p, wi);
+			ray.time = sample.realTime;
+			BSDF *ibsdf;
+			const Volume *volume = bsdf->GetVolume(wi);
+			for (u_int n = 0; n < 1000; ++n) {
+				if (!scene.Intersect(sample, volume,
+					bsdf->dgShading.scattered, ray, 1.f,
+					&lightIsect, &ibsdf, NULL, NULL, &Lt)) {
+					BSDF *lightBsdf;
+					float lightPdf;
+					for (u_int i = 0; i < scene.lights.size(); ++i) {
+						const Light *light = scene.lights[i];
+						if (!light->IsEnvironmental())
+							continue;
+						Li = Lt;
+						if (!light->Le(scene, sample, ray,
+							&lightBsdf, NULL, &lightPdf,
+							&Li))
+							continue;
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, light);
+						const float lightPdf2 = lightPdf *
+							lsPdf * shadowRayCount * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+						bsdfPdf, 1, lightPdf2);
+						L[light->group] += Li * weight;
+						++nContribs;
+					}
+					break;
+				} else {
+					Li = Lt;
+					BSDF *lightBsdf;
+					float lightPdf;
+					if (lightIsect.Le(sample, ray,
+						&lightBsdf, NULL, &lightPdf,
+						&Li)) {
+						const float d2 = DistanceSquared(p,
+						lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, lightIsect.arealight) * shadowRayCount;
+						const float lightPdf2 = lightPdf *
+						lsPdf * d2 /
+						AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+						bsdfPdf, 1, lightPdf2);
+						L[lightIsect.arealight->group] += Li *
+						weight;
+						++nContribs;
+					}
+					if ( lightIsect.primitive->GetPrimitiveType() == ShapeType(ENV_SHAPE)  ) {
+
+						for(uint i = 0 ; i < nLights; i++) {
+							Light *light = scene.lights[i];
+
+							light->Le(scene, sample, ibsdf->dgShading.wuv, &lightBsdf,
+							NULL, &lightPdf, &Li);
+							float d2 = DistanceSquared(p, lightBsdf->dgShading.p);
+							float lightPdf2 = lightPdf ;
+							float weight = PowerHeuristic(1, bsdfPdf, 1, lightPdf2);
+							L[light->group] += Li * weight;
+						}
+						++nContribs;
+
+					}
+			
+
+					bsdfPdf *= ibsdf->Pdf(sample.swl, -wi, wi,
+					BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					if (!(bsdfPdf > 0.f))
+						break;
+					ray = Ray(ibsdf->dgShading.p, wi);
+					ray.time = sample.realTime;
+					Lt *= ibsdf->F(sample.swl, -wi, wi, true, BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					volume = ibsdf->GetVolume(wi);
+				}
+			}
+		}
+	}
+
+	// Do the next event estimation (direct lighting)
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 3) + 3;
+		float lc = data[offset];
+		float lsPdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc,
+		&lsPdf);
+		if (!light)
+			break;
+		lsPdf *= shadowRayCount;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 3 + 1;
+			// Trace a shadow ray by sampling the light source
+			float lightPdf;
+			SWCSpectrum Li;
+			BSDF *lightBsdf;
+			if (!light->SampleL(scene, sample, p, data[offset2],
+			data[offset2 + 1], data[offset2 + 2],
+			&lightBsdf, NULL, &lightPdf, &Li))
+				continue;
+			const Point &pL(lightBsdf->dgShading.p);
+			const Vector wi0(pL);
+			const Volume *volume = bsdf->GetVolume(wi0);
+			if (!volume)
+				volume = lightBsdf->GetVolume(-wi0);
+			if (!scene.Connect(sample, volume,
+				bsdf->dgShading.scattered,
+				false, p, pL, false, &Li, NULL, NULL))
+				continue;
+			const float d2 = wi0.LengthSquared();
+			const Vector wi(wi0 / sqrtf(d2));
+			Li *= lightBsdf->F(sample.swl, Vector(lightBsdf->dgShading.nn),
+				-wi, false) / (d2 * lsPdf);
+			Li *= bsdf->F(sample.swl, wi, wo, true) * scale;
+			if (Li.Black())
+				continue;
+			if (mis) {
+				const float bsdfPdf = bsdf->Pdf(sample.swl,
+				wo, wi);
+				Li *= PowerHeuristic(1, lightPdf * lsPdf * d2 /
+				AbsDot(wi, lightBsdf->ng), 1, bsdfPdf);
+			}
+			// Add light's contribution
+			L[light->group] += Li;
+			++nContribs;
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+		(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}
+
+
+//------------------------------------------------------------------------------
+// SurfaceIntegrator Rendering Hints for Augmented Reality
+//------------------------------------------------------------------------------
+//Old model using Directlighting function from transport.cpp
+/*
+u_int SurfaceIntegratorRenderingHints::SampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+	if (nLights == 0)
+		return 0;
+
+	const float *data = scene.sampler->GetLazyValues(sample,
+		lightSampleOffset, depth);
+	u_int nContribs = 0;
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 5);
+		float lc = data[offset + 2];
+		float pdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc, &pdf);
+		if (!light)
+			break;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 5;
+			const SWCSpectrum Ll(scale *
+				EstimateDirect(scene, *light, sample,
+				p, n, wo, bsdf, data[offset2 + 0],
+				data[offset2 + 1], lc, data[offset2 + 2],
+				data[offset2 + 3], data[offset2 + 4], rayDepth, from_IsSup, to_IsSup, path_type));
+
+			if (!Ll.Black()) {
+				L[light->group] += Ll / pdf;
+				++nContribs;
+			}
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+			(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}
+*/
+
+// New model for Direct Lighting account
+// Note: results are added to L and optional parameter V content
+u_int SurfaceIntegratorRenderingHints::SampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+	if (nLights == 0)
+		return 0;
+
+	if (!to_IsSup)
+		return SampleLights(scene, sample, p, n, wo, bsdf, depth, scale, L, V);
+
+	if (!path_type && rayDepth > 0)
+		return 0;
+
+	const float *data = sample.sampler->GetLazyValues(sample,
+		lightSampleOffset, depth);
+	u_int nContribs = 0;
+	// Use multiple importance sampling if the surface is not diffuse
+	const BxDFType noDiffuse = BxDFType(BSDF_ALL & ~(BSDF_DIFFUSE));
+	const bool mis = bsdf->NumComponents(noDiffuse) > 0;
+	if (mis) {
+		// Trace a second shadow ray by sampling the BSDF
+		Vector wi;
+		float bsdfPdf;
+		BxDFType sampledType;
+		SWCSpectrum Li, Lt(scale);
+		if (bsdf->SampleF(sample.swl, wo, &wi, data[0], data[1], data[2],
+			&Li, &bsdfPdf, BSDF_ALL, &sampledType, NULL, true) &&
+			!(sampledType & BSDF_SPECULAR)) {
+			Lt *= Li;
+			// Add light contribution from BSDF sampling
+			Intersection lightIsect;
+			Ray ray(p, wi);
+			ray.time = sample.realTime;
+			BSDF *ibsdf;
+			const Volume *volume = bsdf->GetVolume(wi);
+			for (u_int n = 0; n < 1000; ++n) {
+				if (!scene.Intersect(sample, volume,
+					bsdf->dgShading.scattered, ray, 1.f,
+					&lightIsect, &ibsdf, NULL, NULL, &Lt)) {
+					BSDF *lightBsdf;
+					float lightPdf;
+					for (u_int i = 0; i < scene.lights.size(); ++i) {
+						const Light *light = scene.lights[i];
+						if (!light->IsEnvironmental())
+							continue;
+						Li = Lt;
+						if (!light->Le(scene, sample, ray,
+							&lightBsdf, NULL, &lightPdf,
+							&Li))
+							continue;
+						if (rayDepth == 0) {
+							Li *=0.f;
+							continue;
+						}
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, light);
+						const float lightPdf2 = lightPdf *
+							lsPdf * shadowRayCount * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[light->group] += Li * weight;
+						++nContribs;
+					}
+					break;
+				} else {
+					Li = Lt;
+					BSDF *lightBsdf;
+					float lightPdf;
+					if (lightIsect.Le(sample, ray,
+						&lightBsdf, NULL, &lightPdf,
+						&Li)) {
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, lightIsect.arealight) * shadowRayCount;
+						const float lightPdf2 = lightPdf *
+							lsPdf * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[lightIsect.arealight->group] += Li *
+							weight;
+						++nContribs;
+					}
+					bsdfPdf *= ibsdf->Pdf(sample.swl, -wi, wi,
+						BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					if (!(bsdfPdf > 0.f))
+						break;
+					ray = Ray(ibsdf->dgShading.p, wi);
+					ray.time = sample.realTime;
+					Lt *= ibsdf->F(sample.swl, -wi, wi, true, BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					volume = ibsdf->GetVolume(wi);
+				}
+			}
+		}
+	}
+
+	// Do the next event estimation (direct lighting)
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 3) + 3;
+		float lc = data[offset];
+		float lsPdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc,
+			&lsPdf);
+		if (!light)
+			break;
+		lsPdf *= shadowRayCount;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 3 + 1;
+			// Trace a shadow ray by sampling the light source
+			float lightPdf;
+			SWCSpectrum Li;
+			BSDF *lightBsdf;
+			if (!light->SampleL(scene, sample, p, data[offset2],
+				data[offset2 + 1], data[offset2 + 2],
+				&lightBsdf, NULL, &lightPdf, &Li))
+				continue;
+			const Point &pL(lightBsdf->dgShading.p);
+			const Vector wi0(pL - p);
+			const Volume *volume = bsdf->GetVolume(wi0);
+			if (!volume)
+				volume = lightBsdf->GetVolume(-wi0);
+			if (!scene.Connect(sample, volume,
+				bsdf->dgShading.scattered,
+				false, p, pL, false, &Li, NULL, NULL, (!mis || rayDepth == 0) ))
+				continue;
+			const float d2 = wi0.LengthSquared();
+			const Vector wi(wi0 / sqrtf(d2));
+			Li *= lightBsdf->F(sample.swl, Vector(lightBsdf->dgShading.nn),
+				-wi, false) / (d2 * lsPdf);
+			Li *= bsdf->F(sample.swl, wi, wo, true) * scale;
+			if (Li.Black())
+				continue;
+			if (mis) {
+				const float bsdfPdf = bsdf->Pdf(sample.swl,
+					wo, wi);
+				Li *= PowerHeuristic(1, lightPdf * lsPdf * d2 /
+					AbsDot(wi, lightBsdf->ng), 1, bsdfPdf);
+			}
+			// Add light's contribution
+			L[light->group] += scale * bsdf->ScaledBcolor() * AbsDot (wi, n) / lsPdf;
+			if (!(!mis || rayDepth == 0))
+				L[light->group] += Li;
+			++nContribs;
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+			(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}
+
+// Old model using DirectLighting function from transport.cpp
+//////////////////////////////////////////////
+/*
+u_int SurfaceIntegratorRenderingHints::EnvSampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+
+	if (nLights == 0)
+		return 0;
+
+	const float *data = scene.sampler->GetLazyValues(sample,
+		lightSampleOffset, depth);
+	u_int nContribs = 0;
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 5);
+		float lc = data[offset + 2];
+		float pdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc, &pdf);
+		if (!light)
+			break;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 5;
+			const SWCSpectrum Ll(scale *
+				EnvEstimateDirect(scene, *light, sample,
+				p, n, wo, bsdf, data[offset2 + 0],
+				data[offset2 + 1], lc, data[offset2 + 2],
+				data[offset2 + 3], data[offset2 + 4], rayDepth, from_IsSup, to_IsSup, path_type));
+
+			if (!Ll.Black()) {
+				L[light->group] += Ll / pdf;
+				++nContribs;
+			}
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+			(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}*/
+
+u_int SurfaceIntegratorRenderingHints::EnvSampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+	if (nLights == 0)
+		return 0;
+
+	if (!to_IsSup)
+        	return EnvSampleLights(scene, sample, p, n, wo, bsdf, depth, scale, L, V);
+
+	if (!path_type && rayDepth > 0)
+		return 0;
+
+	const float *data = sample.sampler->GetLazyValues(sample,
+		lightSampleOffset, depth);
+	u_int nContribs = 0;
+	// Use multiple importance sampling if the surface is not diffuse
+	const BxDFType noDiffuse = BxDFType(BSDF_ALL & ~(BSDF_DIFFUSE));
+	const bool mis = bsdf->NumComponents(noDiffuse) > 0;
+	if (mis) {
+		// Trace a second shadow ray by sampling the BSDF
+		Vector wi;
+		float bsdfPdf;
+		BxDFType sampledType;
+        	SWCSpectrum Li, Lt(scale);
+		if (bsdf->SampleF(sample.swl, wo, &wi, data[0], data[1], data[2],
+			&Li, &bsdfPdf, BSDF_ALL, &sampledType, NULL, true) &&
+			!(sampledType & BSDF_SPECULAR)) {
+			Lt *= Li;
+			// Add light contribution from BSDF sampling
+			Intersection lightIsect;
+			Ray ray(p, wi);
+			ray.time = sample.realTime;
+			BSDF *ibsdf;
+			const Volume *volume = bsdf->GetVolume(wi);
+			for (u_int n = 0; n < 1000; ++n) {
+				if (!scene.Intersect(sample, volume,
+					bsdf->dgShading.scattered, ray, 1.f,
+					&lightIsect, &ibsdf, NULL, NULL, &Lt)) {
+					BSDF *lightBsdf;
+					float lightPdf;
+					for (u_int i = 0; i < scene.lights.size(); ++i) {
+						const Light *light = scene.lights[i];
+						if (!light->IsEnvironmental())
+							continue;
+						Li = Lt;
+						if (!light->Le(scene, sample, ray,
+							&lightBsdf, NULL, &lightPdf,
+							&Li))
+							continue;
+						if (rayDepth == 0) {
+							Li *=0.f;
+							continue;
+						}
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, light);
+						const float lightPdf2 = lightPdf *
+							lsPdf * shadowRayCount * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[light->group] += Li * weight;
+						++nContribs;
+					}
+					break;
+				} else {
+					Li = Lt;
+					BSDF *lightBsdf;
+					float lightPdf;
+					if (lightIsect.Le(sample, ray,
+						&lightBsdf, NULL, &lightPdf,
+						&Li)) {
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, lightIsect.arealight) * shadowRayCount;
+						const float lightPdf2 = lightPdf *
+							lsPdf * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[lightIsect.arealight->group] += Li *
+							weight;
+						++nContribs;
+					}
+					if ( lightIsect.primitive->GetPrimitiveType() == ShapeType(ENV_SHAPE) && rayDepth > 0 ) {
+
+						for(uint i = 0 ; i < nLights; i++) {
+							Light *light = scene.lights[i];
+
+							light->Le(scene, sample, ibsdf->dgShading.wuv, &lightBsdf,
+							NULL, &lightPdf, &Li);
+							float d2 = DistanceSquared(p, lightBsdf->dgShading.p);
+							float lightPdf2 = lightPdf ;
+							float weight = PowerHeuristic(1, bsdfPdf, 1, lightPdf2);
+							L[light->group] += Li * weight;
+						}
+						++nContribs;
+
+					}
+					bsdfPdf *= ibsdf->Pdf(sample.swl, -wi, wi,
+						BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					if (!(bsdfPdf > 0.f))
+						break;
+					ray = Ray(ibsdf->dgShading.p, wi);
+					ray.time = sample.realTime;
+					Lt *= ibsdf->F(sample.swl, -wi, wi, true, BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					volume = ibsdf->GetVolume(wi);
+				}
+			}
+		}
+	}
+
+	// Do the next event estimation (direct lighting)
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 3) + 3;
+		float lc = data[offset];
+		float lsPdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc,
+			&lsPdf);
+		if (!light)
+			break;
+		lsPdf *= shadowRayCount;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 3 + 1;
+			// Trace a shadow ray by sampling the light source
+			float lightPdf;
+			SWCSpectrum Li, SupLi(1.f);
+			BSDF *lightBsdf;
+            if (!light->SampleL(scene, sample, p, n, data[offset2],
+				data[offset2 + 1], data[offset2 + 2],
+				&lightBsdf, NULL, &lightPdf, &Li))
+				continue;
+			const Point &pL(lightBsdf->dgShading.p);
+			const Vector wi0(pL - p);
+			const Volume *volume = bsdf->GetVolume(wi0);
+			if (!volume)
+				volume = lightBsdf->GetVolume(-wi0);
+			if (!scene.Connect(sample, volume,
+				bsdf->dgShading.scattered,
+				false, p, pL, false, &Li, NULL, NULL, (!mis || rayDepth == 0) ))
+				continue;
+			const float d2 = wi0.LengthSquared();
+			const Vector wi(wi0 / sqrtf(d2));
+			Li *= lightBsdf->F(sample.swl, Vector(lightBsdf->dgShading.nn),
+				-wi, false) / (d2 * lsPdf);
+			Li *= bsdf->F(sample.swl, wi, wo, true) * scale;
+			if (Li.Black())
+				continue;
+			if (mis) {
+				const float bsdfPdf = bsdf->Pdf(sample.swl,
+					wo, wi);
+				Li *= PowerHeuristic(1, lightPdf * lsPdf * d2 /
+					AbsDot(wi, lightBsdf->ng), 1, bsdfPdf);
+			}
+			// Add light's contribution
+            if( light->LeSupport(scene, sample, bsdf->dgShading.wuv, &SupLi) )
+                L[light->group] += scale * SupLi * AbsDot (wi, n) / lsPdf;
+			else
+                L[light->group] += scale * bsdf->GetBscale() * SupLi * AbsDot (wi, n) / lsPdf;
+
+			if (!(!mis || rayDepth == 0))
+				L[light->group] += Li;
+			++nContribs;
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+			(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}
+
+/*
+//New model
+u_int SurfaceIntegratorRenderingHints::EnvSampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+	if (nLights == 0)
+		return 0;
+
+	if (!to_IsSup)
+		return EnvSampleLights(scene, sample, p, n, wo, bsdf, depth, scale, L, V);
+
+	if (!path_type && rayDepth > 0)
+		return 0;
+
+	const float *data = sample.sampler->GetLazyValues(sample,
+		lightSampleOffset, depth);
+	u_int nContribs = 0;
+	// Use multiple importance sampling if the surface is not diffuse
+	const BxDFType noDiffuse = BxDFType(BSDF_ALL & ~(BSDF_DIFFUSE));
+	const bool mis = bsdf->NumComponents(noDiffuse) > 0;
+	if (mis) {
+		// Trace a second shadow ray by sampling the BSDF
+		Vector wi;
+		float bsdfPdf;
+		BxDFType sampledType;
+		SWCSpectrum Li, Lt(scale), SupLi(1.f);
+		if (bsdf->SampleF(sample.swl, wo, &wi, data[0], data[1], data[2],
+			&Li, &bsdfPdf, BSDF_ALL, &sampledType, NULL, true) &&
+			!(sampledType & BSDF_SPECULAR)) {
+			Lt *= Li;
+			// Add light contribution from BSDF sampling
+			Intersection lightIsect;
+			Ray ray(p, wi);
+			ray.time = sample.realTime;
+			BSDF *ibsdf;
+			const Volume *volume = bsdf->GetVolume(wi);
+			for (u_int n = 0; n < 1000; ++n) {
+				if (!scene.Intersect(sample, volume,
+					bsdf->dgShading.scattered, ray, 1.f,
+					&lightIsect, &ibsdf, NULL, NULL, &Lt)) {
+					BSDF *lightBsdf;
+					float lightPdf;
+					for (u_int i = 0; i < scene.lights.size(); ++i) {
+						const Light *light = scene.lights[i];
+						if (!light->IsEnvironmental())
+							continue;
+						Li = Lt;
+						if (!light->Le(scene, sample, ray,
+							&lightBsdf, NULL, &lightPdf,
+							&Li))
+							continue;
+						if (rayDepth == 0) {
+							Li *=0.f;
+							continue;
+						}
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, light);
+						const float lightPdf2 = lightPdf *
+							lsPdf * shadowRayCount * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[light->group] += Li * weight;
+						++nContribs;
+					}
+					break;
+				} else {
+					Li = Lt;
+					BSDF *lightBsdf;
+					float lightPdf;
+					if (lightIsect.Le(sample, ray,
+						&lightBsdf, NULL, &lightPdf,
+						&Li)) {
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, lightIsect.arealight) * shadowRayCount;
+						const float lightPdf2 = lightPdf *
+							lsPdf * d2 /
+							AbsDot(wi, lightBsdf->ng);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[lightIsect.arealight->group] += Li *
+							weight;
+						++nContribs;
+					}
+					bsdfPdf *= ibsdf->Pdf(sample.swl, -wi, wi,
+						BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					if (!(bsdfPdf > 0.f))
+						break;
+					ray = Ray(ibsdf->dgShading.p, wi);
+					ray.time = sample.realTime;
+					Lt *= ibsdf->F(sample.swl, -wi, wi, true, BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					volume = ibsdf->GetVolume(wi);
+				}
+			}
+		}
+	}
+
+	// Do the next event estimation (direct lighting)
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 3) + 3;
+		float lc = data[offset];
+		float lsPdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc,
+			&lsPdf);
+		if (!light)
+			break;
+		lsPdf *= shadowRayCount;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 3 + 1;
+			// Trace a shadow ray by sampling the light source
+			float lightPdf;
+			SWCSpectrum Li, SupLi(1.f);
+			BSDF *lightBsdf;
+			if (!light->SampleL(scene, sample, p, data[offset2],
+				data[offset2 + 1], data[offset2 + 2],
+				&lightBsdf, NULL, &lightPdf, &Li))
+				continue;
+			const Point &pL(lightBsdf->dgShading.p);
+			const Vector wi0(pL - p);
+			const Volume *volume = bsdf->GetVolume(wi0);
+			if (!volume)
+				volume = lightBsdf->GetVolume(-wi0);
+			if (!scene.Connect(sample, volume,
+				bsdf->dgShading.scattered,
+				false, p, pL, false, &Li, NULL, NULL, (!mis || rayDepth == 0) ))
+				continue;
+			const float d2 = wi0.LengthSquared();
+			const Vector wi(wi0 / sqrtf(d2));
+			Li *= lightBsdf->F(sample.swl, Vector(lightBsdf->dgShading.nn),
+				-wi, false) / (d2 * lsPdf);
+			Li *= bsdf->F(sample.swl, wi, wo, true) * scale;
+			if (Li.Black())
+				continue;
+			if (mis) {
+				const float bsdfPdf = bsdf->Pdf(sample.swl,
+					wo, wi);
+				Li *= PowerHeuristic(1, lightPdf * lsPdf * d2 /
+					AbsDot(wi, lightBsdf->ng), 1, bsdfPdf);
+			}
+			// Add light's contribution
+			if( light.LeSupport(scene, sample, bsdf->dgShading.wuv, &SupLi) )
+				L[light->group] += scale * SupLi * AbsDot (wi, n) / lsPdf;
+			else
+				L[light->group] += scale * bsdf->GetBscale() * SupLi * AbsDot (wi, n) / lsPdf;
+
+			if (!(!mis || rayDepth == 0))
+				L[light->group] += Li;
+			++nContribs;
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+			(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}*/
+/*
+// Note: results are added to L and optional parameter V content
+u_int SurfaceIntegratorRenderingHints::EnvSampleLights(const Scene &scene,
+	const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+	BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+	vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+	if (nLights == 0)
+		return 0;
+
+	const float *data = scene.sampler->GetLazyValues(sample,
+		lightSampleOffset, depth);
+	u_int nContribs = 0;
+	// Use multiple importance sampling if the surface is not diffuse
+	const BxDFType noDiffuse = BxDFType(BSDF_ALL & ~(BSDF_DIFFUSE));
+	const bool mis = bsdf->NumComponents(noDiffuse) > 0;
+	if (mis) {
+		// Trace a second shadow ray by sampling the BSDF
+		Vector wi;
+		float bsdfPdf;
+		BxDFType sampledType;
+		SWCSpectrum Li, Lt(scale);
+		if (bsdf->SampleF(sample.swl, wo, &wi, data[0], data[1], data[2],
+			&Li, &bsdfPdf, BSDF_ALL, &sampledType, NULL, true) &&
+			!(sampledType & BSDF_SPECULAR)) {
+			Lt *= Li;
+			// Add light contribution from BSDF sampling
+			Intersection lightIsect;
+			Ray ray(p, wi);
+			ray.time = sample.realTime;
+			BSDF *ibsdf;
+			const Volume *volume = bsdf->GetVolume(wi);
+
+			for (u_int n = 0; n < 1000; ++n) {
+				if (!scene.Intersect(sample, volume,
+					bsdf->dgShading.scattered, ray, 1.f,
+					&lightIsect, &ibsdf, NULL, NULL, &Lt)) {
+					BSDF *lightBsdf;
+					float lightPdf;
+					for (u_int i = 0; i < scene.lights.size(); ++i) {
+						const Light *light = scene.lights[i];
+						if (!light->IsEnvironmental())
+							continue;
+						Li = Lt;
+
+						if ( to_IsSup && !(path_type && rayDepth > 0) ) 
+							continue;
+
+						if (!light->Le(scene, sample, ray,
+							&lightBsdf, NULL, &lightPdf,
+							&Li))
+							continue;
+						const float d2 = DistanceSquared(p,
+							lightBsdf->dgShading.p);
+						const float lsPdf = lsStrategy->Pdf(scene, light);
+						const float lightPdf2 = lightPdf *
+							lsPdf * shadowRayCount * d2 /
+							AbsDot(wi, lightBsdf->dgShading.nn);
+						const float weight = PowerHeuristic(1,
+							bsdfPdf, 1, lightPdf2);
+						L[light->group] += Li * weight;
+						++nContribs;
+					}
+					break;
+				} else {
+					if (lightIsect.arealight) {
+						BSDF *lightBsdf;
+						float lightPdf;
+						Li = Lt * lightIsect.Le(sample, ray, &lightBsdf,
+							NULL, &lightPdf);
+						if (!Li.Black()) {
+							const float d2 = DistanceSquared(p,
+								lightBsdf->dgShading.p);
+							const float lsPdf = lsStrategy->Pdf(scene, lightIsect.arealight) * shadowRayCount;
+							const float lightPdf2 = lightPdf *
+								lsPdf * d2 /
+								AbsDot(wi, lightBsdf->dgShading.nn);
+							const float weight = PowerHeuristic(1,
+								bsdfPdf, 1, lightPdf2);
+							L[lightIsect.arealight->group] += Li *
+								weight;
+							++nContribs;
+						}
+					}
+					bsdfPdf *= ibsdf->Pdf(sample.swl, -wi, wi,
+						BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					if (!(bsdfPdf > 0.f))
+						break;
+					ray = Ray(ibsdf->dgShading.p, wi);
+					ray.time = sample.realTime;
+					Lt *= ibsdf->F(sample.swl, -wi, wi, true, BxDFType(BSDF_TRANSMISSION | BSDF_SPECULAR));
+					volume = ibsdf->GetVolume(wi);
+				}
+			}
+
+
+
+
+		}
+	}
+
+	// Do the next event estimation (direct lighting)
+	const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+	Vector Wsup = p - scene.camera->CameraToWorld( Point(0.f, 0.f, 0.f) );
+	for (u_int i = 0; i < sampleCount; ++i) {
+		const u_int offset = i * (1 + shadowRayCount * 3) + 3;
+		float lc = data[offset];
+		float lsPdf;
+		const Light *light = lsStrategy->SampleLight(scene, i, &lc,
+			&lsPdf);
+		if (!light)
+			break;
+		lsPdf *= shadowRayCount;
+		for (u_int j = 0; j < shadowRayCount; ++j) {
+			const u_int offset2 = offset + j * 3 + 1;
+			// Trace a shadow ray by sampling the light source
+			float lightPdf;
+			SWCSpectrum Li;
+			BSDF *lightBsdf;
+			SWCSpectrum SupLi(1.f);
+
+			if (!light->SampleL(scene, sample, p, data[offset2],
+				data[offset2 + 1], data[offset2 + 2],
+				&lightBsdf, NULL, &lightPdf, &Li))
+				continue;
+			const Point &pL(lightBsdf->dgShading.p);
+			const Vector wi0(pL - p);
+			const Volume *volume = bsdf->GetVolume(wi0);
+			if (!volume)
+				volume = lightBsdf->GetVolume(-wi0);
+			if (!scene.Connect(sample, volume,
+				bsdf->dgShading.scattered,
+				false, p, pL, false, &Li, NULL, NULL, (to_IsSup && (!mis || rayDepth == 0)) ))
+				continue;
+			const float d2 = wi0.LengthSquared();
+			const Vector wi(wi0 / sqrtf(d2));
+			Li *= lightBsdf->F(sample.swl, Vector(lightBsdf->dgShading.nn),
+				-wi, false) / (d2 * lsPdf);
+			Li *= bsdf->F(sample.swl, wi, wo, true) * scale;
+			if (Li.Black())
+				continue;
+			if (mis) {
+				const float bsdfPdf = bsdf->Pdf(sample.swl,
+					wo, wi);
+				Li *= PowerHeuristic(1, lightPdf * lsPdf * d2 /
+					AbsDot(wi, lightBsdf->dgShading.nn), 1, bsdfPdf);
+			}
+			// Add light's contribution
+			if (to_IsSup) { 
+				if ( path_type || rayDepth == 0 ) {
+					light->LeSupport(scene, sample,	Wsup, &SupLi);
+					L[light->group]  += bsdf->GetBscale() * SupLi * AbsDot (wi, n);
+					if(mis && rayDepth > 0)
+						L[light->group] += Li;
+					++nContribs;
+				}
+			} else {
+				L[light->group] += Li;
+				++nContribs;
+			}
+
+		}
+	}
+
+	if (V) {
+		for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+			(*V)[i] += L[i].Filter(sample.swl);
+	}
+
+	return nContribs;
+}
+*/
+
+u_int SurfaceIntegratorRenderingHints::CombSampleLights(const Scene &scene,
+    const Sample &sample, const Point &p, const Normal &n, const Vector &wo,
+    BSDF *bsdf, u_int depth, const SWCSpectrum &scale,
+    vector<SWCSpectrum> &L, int rayDepth, bool from_IsSup, bool to_IsSup, bool path_type, vector<float> *V) const
+{
+
+    if (nLights == 0)
+        return 0;
+
+    const float *data = scene.sampler->GetLazyValues(sample,
+        lightSampleOffset, depth);
+    u_int nContribs = 0;
+    const u_int sampleCount = lsStrategy->GetSamplingLimit(scene);
+    for (u_int i = 0; i < sampleCount; ++i) {
+        const u_int offset = i * (1 + shadowRayCount * 5);
+        float lc = data[offset + 2];
+        float pdf;
+        const Light *light = lsStrategy->SampleLight(scene, i, &lc, &pdf);
+        if (!light)
+            break;
+        for (u_int j = 0; j < shadowRayCount; ++j) {
+            const u_int offset2 = offset + j * 5;
+            const SWCSpectrum Ll(scale *
+                CombEstimateDirect(scene, *light, sample,
+                p, n, wo, bsdf, data[offset2 + 0],
+                data[offset2 + 1], lc, data[offset2 + 2],
+                data[offset2 + 3], data[offset2 + 4], rayDepth, from_IsSup, to_IsSup, path_type));
+
+            if (!Ll.Black()) {
+                L[light->group] += Ll / pdf;
+                ++nContribs;
+            }
+        }
+    }
+
+    if (V) {
+        for (u_int i = 0; i < scene.lightGroups.size(); ++i)
+            (*V)[i] += L[i].Filter(sample.swl);
+    }
+
+    return nContribs;
 }

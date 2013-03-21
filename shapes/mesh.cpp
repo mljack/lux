@@ -33,9 +33,9 @@
 using namespace lux;
 
 Mesh::Mesh(const Transform &o2w, bool ro, const string &name,
-	MeshAccelType acceltype,
-	u_int nv, const Point *P, const Normal *N, const float *UV,
-	const float *C, const float *ALPHA,
+	ShapeType shpType, bool proj, Point cam_, MeshAccelType acceltype,
+	u_int nv, const Point *P, const Normal *N, const float *UV, 
+	const float *C, const float *ALPHA, const Point *WUV,
 	MeshTriangleType tritype, u_int trisCount, const int *tris,
 	MeshQuadType quadtype, u_int nquadsCount, const int *quads,
 	MeshSubdivType subdivtype, u_int nsubdivlevels,
@@ -43,6 +43,20 @@ Mesh::Mesh(const Transform &o2w, bool ro, const string &name,
 	bool dmNormalSmooth, bool dmSharpBoundary, bool normalsplit, bool genTangents)
 	: Shape(o2w, ro, name)
 {
+
+	shape_type = shpType;
+	proj_text = proj;
+	cam = cam_;
+
+	if ( shape_type == ShapeType(AR_SHAPE) ) {
+		proj_text = true;
+		Scale = new float[nv];
+		for (u_int i  = 0; i < nv; ++i)
+			Scale[i] = -1.f;
+	}
+	else
+		Scale = NULL;
+
 	accelType = acceltype;
 
 	subdivType = subdivtype;
@@ -64,12 +78,38 @@ Mesh::Mesh(const Transform &o2w, bool ro, const string &name,
 	for (u_int i  = 0; i < nverts; ++i)
 		p[i] = ObjectToWorld * P[i];
 
-	// Dade - copy UV and N vertex data, if present
+	// Aldo - copy WUV, if present
+	if (WUV) {
+		wuv = new Point[nverts];
+		for (u_int i  = 0; i < nverts; ++i){
+			wuv[i] = WUV[i];
+		}
+	} else
+		wuv = NULL;
+
 	if (UV) {
 		uvs = new float[2 * nverts];
 		memcpy(uvs, UV, 2 * nverts * sizeof(float));
 	} else
 		uvs = NULL;
+
+//	if (UV) {
+//		LOG(LUX_INFO, LUX_NOERROR) << "Criando worldtext";
+//		wuv = new Point[nverts];
+//		float phi;
+//		float theta, sinTheta;
+//		for (u_int i  = 0; i < nverts; ++i) {
+//			phi = UV[2*i] * 2.f * M_PI;
+//			theta = UV[2*i+1] * M_PI;
+//			sinTheta = sinf(theta);
+//			Vector wh = SphericalDirection(sinTheta, cosf(theta), phi);
+//			wuv[i] = Point(4*wh.x, 4*wh.y, 4*wh.z);
+//		}
+//		LOG(LUX_INFO, LUX_NOERROR) << "Worldtext criado";
+//	} else
+//		wuv = NULL;
+
+
 
 	if (N) {
 		n = new Normal[nverts];
@@ -111,7 +151,7 @@ Mesh::Mesh(const Transform &o2w, bool ro, const string &name,
 	vector<int> quadsToSplit;
 	if (nquads == 0)
 		quadVertexIndex = NULL;
-	else {
+	else { //LOG(LUX_INFO, LUX_NOERROR) << "NQUaDS nao nulo: "<< nquads<< "Must subdivide?: "<< mustSubdivide;
 		// Dade - check quads and split them if required
 		for (u_int i = 0; i < nquads; i++) {
 			const u_int idx = 4 * i;
@@ -227,6 +267,8 @@ Mesh::~Mesh()
 	delete[] triVertexIndex;
 	delete[] quadVertexIndex;
 	delete[] p;
+	delete[] wuv;
+	delete[] Scale;
 	delete[] n;
 	delete[] uvs;
 	delete[] cols;
@@ -271,13 +313,14 @@ void Mesh::Refine(vector<boost::shared_ptr<Primitive> > &refined,
 
 	// Possibly subdivide the triangles
 	if (mustSubdivide) {
+		LOG(LUX_INFO, LUX_NOERROR) << "Refine: must Subdivide ";
 		MeshSubdivType concreteSubdivType = subdivType;
 		switch (concreteSubdivType) {
 			case SUBDIV_LOOP: {
 				// TODO: add the support for vertex colors/alphas too
 
 				// Apply subdivision
-				LoopSubdiv loopsubdiv(ntris, nverts,
+				LoopSubdiv loopsubdiv(shape_type, proj_text, cam, ntris, nverts,
 					triVertexIndex, p, uvs, n,
 					nSubdivLevels, displacementMap,
 					displacementMapScale,
@@ -297,7 +340,7 @@ void Mesh::Refine(vector<boost::shared_ptr<Primitive> > &refined,
 				delete[] cols;
 				delete[] alphas;
 				delete[] triVertexIndex;
-
+LOG(LUX_INFO, LUX_NOERROR) << "Refine:loop subdiv ";
 				// Copy the new mesh data
 				nverts = res->nverts;
 				ntris = res->ntris;
@@ -579,7 +622,6 @@ void Mesh::GetIntersection(const luxrays::RayHit &rayHit, const u_int index, Int
 	const Point &p3 = p[v2];
 	const Vector e1 = p2 - p1;
 	const Vector e2 = p3 - p1;
-
 	// Fill in _DifferentialGeometry_ from triangle hit
 	// Compute triangle partial derivatives
 	Vector dpdu, dpdv;
@@ -643,6 +685,7 @@ void Mesh::GetShadingGeometry(const Transform &obj2world,
 {
 	if (!n) {
 		*dgShading = dg;
+		dgShading->Scale = ( GetScale(0)+GetScale(1)+GetScale(2) )/3.f;
 		return;
 	}
 
@@ -654,6 +697,8 @@ void Mesh::GetShadingGeometry(const Transform &obj2world,
 	const Normal nsi = dg.iData.mesh.coords[0] * n[v0] +
 		dg.iData.mesh.coords[1] * n[v1] + dg.iData.mesh.coords[2] * n[v2];
 	const Normal ns = Normalize(nsi);
+	const float lscale = dg.iData.mesh.coords[0] * Scale[v0] +
+		dg.iData.mesh.coords[1] * Scale[v1] + dg.iData.mesh.coords[2] * Scale[v2];
 
 	Vector ss, ts;
 	Vector tangent, bitangent;
@@ -724,7 +769,7 @@ void Mesh::GetShadingGeometry(const Transform &obj2world,
 	}
 
 	*dgShading = DifferentialGeometry(dg.p, ns, ss, ts,
-		dndu, dndv, tangent, bitangent, sign, dg.u, dg.v, this);
+		dndu, dndv, tangent, bitangent, sign, dg.u, dg.v, this, lscale, dg.wuv);
 }
 
 // Class for storing mesh data pointers and holding returned tangent space data
@@ -916,7 +961,7 @@ void Mesh::GenerateTangentSpace() {
 	delete[] vertDataOut;
 }
 
-static Shape *CreateShape(const Transform &o2w, bool reverseOrientation, const ParamSet &params,
+static Shape *CreateShape( const Transform &o2w, bool reverseOrientation, const ParamSet &params,
 		const string& accelTypeStr, const string& triTypeStr, const string& quadTypeStr,
 		const int* triIndices, u_int triIndicesCount,
 		const int* quadIndices, u_int quadIndicesCount,
@@ -925,7 +970,8 @@ static Shape *CreateShape(const Transform &o2w, bool reverseOrientation, const P
 		const float *alphas, u_int alphasCount,
 		const string& subdivSchemeStr, u_int nSubdivLevels,
 		const Point* P, u_int npi,
-		const Normal* N, u_int nni) {
+		const Normal* N, u_int nni, const Point* WUV, u_int nWuv ) {
+
 	string name = params.FindOneString("name", "'mesh'");
 
 	// Lotus - read general data
@@ -962,6 +1008,12 @@ static Shape *CreateShape(const Transform &o2w, bool reverseOrientation, const P
 	}
 	if (!P)
 		return NULL;
+
+
+	if (WUV && (nWuv != npi)) {
+		SHAPE_LOG(name, LUX_ERROR,LUX_CONSISTENCY)<< "Number of \"WUV\"s for mesh must match \"P\"s";
+		WUV = NULL;
+	}
 
 	if (N && (nni != npi)) {
 		SHAPE_LOG(name, LUX_ERROR,LUX_CONSISTENCY)<< "Number of \"N\"s for mesh must match \"P\"s";
@@ -1051,9 +1103,21 @@ static Shape *CreateShape(const Transform &o2w, bool reverseOrientation, const P
 
 	bool genTangents = params.FindOneBool("generatetangents", false);
 
+	string  type = params.FindOneString( "type", "native" );
+
+	ShapeType shpType;
+	if (type == "native")
+		shpType = ShapeType(LUX_SHAPE);
+	else if (type == "support")
+		shpType = ShapeType(AR_SHAPE);
+	else if (type == "environment")
+		shpType = ShapeType(ENV_SHAPE);
+
+	bool  proj_text = params.FindOneBool( "projection", false );
+	Point  cam = params.FindOnePoint( "cam", Point(0,0,0) );
 	return new Mesh(o2w, reverseOrientation, name,
-		accelType,
-		npi, P, N, UV, cols, alphas,
+		shpType, proj_text, cam, accelType,
+		npi, P, N, UV, cols, alphas, WUV,
 		triType, triIndicesCount, triIndices,
 		quadType, quadIndicesCount, quadIndices,
 		subdivType, nSubdivLevels, displacementMap,
@@ -1076,6 +1140,8 @@ static Shape *CreateShape( const Transform &o2w, bool reverseOrientation, const 
 	if (UV == NULL) {
 		UV = params.FindFloat("st", &UVCount);
 	}
+	u_int nWuv;
+	const Point *WUV = params.FindPoint("WUV", &nWuv);
 
 	u_int colsCount;
 	const float *cols = params.FindFloat("C", &colsCount);
@@ -1102,7 +1168,6 @@ static Shape *CreateShape( const Transform &o2w, bool reverseOrientation, const 
 	accelTypeStr = params.FindOneString("acceltype", accelTypeStr);
  	string subdivscheme = params.FindOneString("subdivscheme", "loop");
 	int nSubdivLevels = max(0, params.FindOneInt("nsubdivlevels", params.FindOneInt("nlevels", 0)));
-
 	return CreateShape(o2w, reverseOrientation, params,
 		accelTypeStr, triTypeStr, quadTypeStr,
 		triIndices, triIndicesCount,
@@ -1112,7 +1177,7 @@ static Shape *CreateShape( const Transform &o2w, bool reverseOrientation, const 
 		alphas, alphasCount,
 		subdivscheme, nSubdivLevels,
 		P, npi,
-		N, nni);
+		N, nni, WUV, nWuv);
 }
 
 Shape *Mesh::CreateShape(const Transform &o2w, bool reverseOrientation, const ParamSet &params) {

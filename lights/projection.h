@@ -35,7 +35,7 @@ public:
 	// ProjectionLight Public Methods
 	ProjectionLight(const Transform &light2world, 
 		const boost::shared_ptr< Texture<SWCSpectrum> > &L, float gain,
-		const string &texname, float fov);
+		const string &texname, float fov, bool sup);
 	virtual ~ProjectionLight();
 	virtual bool IsDeltaLight() const { return true; }
 	virtual bool IsEnvironmental() const { return false; }

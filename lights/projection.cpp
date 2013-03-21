@@ -103,8 +103,8 @@ private:
 ProjectionLight::ProjectionLight(const Transform &light2world,
 		const boost::shared_ptr< Texture<SWCSpectrum> > &L, 
 		float g, const string &texname,
-		float fov)
-	: Light("ProjectionLight-" + boost::lexical_cast<string>(this), light2world),
+		float fov, bool sup)
+	: Light("ProjectionLight-" + boost::lexical_cast<string>(this), light2world, sup),
 	Lbase(L) {
 	lightPos = LightToWorld * Point(0,0,0);
 	Lbase->SetIlluminant();
@@ -196,8 +196,9 @@ Light* ProjectionLight::CreateLight(const Transform &light2world,
 	float g = paramSet.FindOneFloat("gain", 1.f);
 	float fov = paramSet.FindOneFloat("fov", 45.);
 	string texname = paramSet.FindOneString("mapname", "");
+	bool sup = paramSet.FindOneBool("support", false);
 
-	ProjectionLight *l = new ProjectionLight(light2world, L, g, texname, fov);
+	ProjectionLight *l = new ProjectionLight(light2world, L, g, texname, fov, sup);
 	l->hints.InitParam(paramSet);
 	return l;
 }

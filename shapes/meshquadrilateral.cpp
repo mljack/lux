@@ -272,15 +272,18 @@ BBox MeshQuadrilateral::WorldBound() const {
 	return Union(BBox(p0, p1), BBox(p2, p3));
 }
 
-bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect) const {
+bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect, bool null_shp_isect) const {
 	// Compute intersection for quadrilateral
 	// based on "An Efficient Ray-Quadrilateral Intersection Test"
 	// by Ares Lagae and Philip Dutr�
 	// http://www.cs.kuleuven.be/~graphics/CGRG.PUBLICATIONS/LagaeDutre2005AnEfficientRayQuadrilateralIntersectionTest/
 	// http://jgt.akpeters.com/papers/LagaeDutre05/erqit.cpp.html
-
+LOG(LUX_INFO, LUX_NOERROR) << "Mesh Quadrilateral intersect ";
 	if (!idx)
 		return false;
+
+	//look if shape is a null type
+	if ( null_shp_isect && GetPrimitiveType() == ShapeType(AR_SHAPE) ) return false;
 
 	// Get quadrilateral vertices in _p00_, _p10_, _p11_ and _p01_
 	const Point &p00 = mesh->p[idx[0]];
@@ -409,11 +412,16 @@ bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect) const {
 	Normal nn(Normal(Normalize(N)));
 
 	if (isect) {
+		Point wtext = ray(t);
+		//if (mesh->wuv) {
+		//	wtext = Point (mesh->wuv[v[0]] + b1 * (mesh->wuv[v[1]] - mesh->wuv[v[0]]) + b2 * (mesh->wuv[v[2]] - mesh->wuv[v[0]]));
+		//}
+	//LOG(LUX_INFO, LUX_NOERROR) << "Mesh Quadrilateral: "<< wtext;
 		isect->dg = DifferentialGeometry(ray(t),
 			nn,
 			dpdu, dpdv,
 			Normal(0, 0, 0), Normal(0, 0, 0),
-			u, v, this);
+			u, v, this, 0.f, wtext);
 		isect->dg.AdjustNormal(mesh->reverseOrientation, mesh->transformSwapsHandedness);
 		isect->Set(mesh->ObjectToWorld, this, mesh->GetMaterial(),
 			mesh->GetExterior(), mesh->GetInterior());
@@ -423,7 +431,7 @@ bool MeshQuadrilateral::Intersect(const Ray &ray, Intersection *isect) const {
 	return true;
 }
 
-bool MeshQuadrilateral::IntersectP(const Ray &ray) const {
+bool MeshQuadrilateral::IntersectP(const Ray &ray, bool null_shp_isect) const {
 	return Intersect(ray, NULL);
 }
 
@@ -451,6 +459,8 @@ void MeshQuadrilateral::GetShadingGeometry(const Transform &obj2world,
 {
 	if (!mesh->n) {
 		*dgShading = dg;
+		if ( mesh->shape_type == ShapeType(AR_SHAPE) )
+			dgShading->Scale = ( mesh->Scale[idx[0]]+mesh->Scale[idx[1]]+mesh->Scale[idx[2]]+mesh->Scale[idx[3]] ) / 4.f;
 		if (!mesh->uvs) {
 			// Lotus - the length of dpdu/dpdv can be important for bumpmapping
 			const BBox bounds = MeshQuadrilateral::WorldBound();
@@ -468,6 +478,14 @@ void MeshQuadrilateral::GetShadingGeometry(const Transform &obj2world,
 		(dg.u * (1.0f - dg.v)) * mesh->n[idx[1]] +
 		(dg.u * dg.v) * mesh->n[idx[2]] +
 		((1.0f - dg.u) * dg.v) * mesh->n[idx[3]])));
+
+	float lscale = 1.f;
+	if ( mesh->shape_type == ShapeType(AR_SHAPE) )
+		lscale =  ((1.0f - dg.u) * (1.0f - dg.v)) * mesh->Scale[idx[0]] +
+					 (dg.u * (1.0f - dg.v)) * mesh->Scale[idx[1]] +
+					 (dg.u * dg.v) * mesh->Scale[idx[2]] +
+					 ((1.0f - dg.u) * dg.v) * mesh->Scale[idx[3]];
+
 	float lenDpDu = dg.dpdu.Length();
 	float lenDpDv = dg.dpdv.Length();
 	Vector ts = Normalize(Cross(dg.dpdu, ns));
@@ -530,7 +548,7 @@ void MeshQuadrilateral::GetShadingGeometry(const Transform &obj2world,
 	}
 
 	*dgShading = DifferentialGeometry(dg.p, ns, ss, ts, dndu, dndv,
-		dg.u, dg.v, this);
+		dg.u, dg.v, this, lscale, dg.wuv);
 }
 
 void MeshQuadrilateral::GetShadingInformation(const DifferentialGeometry &dgShading,

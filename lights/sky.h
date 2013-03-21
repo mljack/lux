@@ -33,7 +33,7 @@ public:
 	// SkyLight Public Methods
 	SkyLight(const Transform &light2world, float skyscale, u_int ns,
 		Vector sd, float turb, float aconst, float bconst,
-		float cconst, float dconst, float econst);
+		float cconst, float dconst, float econst, bool sup);
 	virtual ~SkyLight();
 	virtual float Power(const Scene &scene) const;
 	virtual bool IsDeltaLight() const { return false; }

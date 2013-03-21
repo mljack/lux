@@ -88,10 +88,15 @@ BBox MeshBaryTriangle::WorldBound() const
 	return Union(BBox(p1, p2), p3);
 }
 
-bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect) const
+bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect, bool null_shp_isect) const
 {
+	//LOG(LUX_INFO, LUX_NOERROR) << "Mesh Barytriangle intersect ";
 	Vector e1, e2, s1;
 	// Compute $\VEC{s}_1$
+
+	//look if shape is a null type
+	if ( null_shp_isect && GetPrimitiveType() == ShapeType(AR_SHAPE) ) return false;
+
 	// Get triangle vertices in _p1_, _p2_, and _p3_
 	const Point &p1 = mesh->p[v[0]];
 	const Point &p2 = mesh->p[v[1]];
@@ -143,14 +148,26 @@ bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect) const
 	}
 
 	// Interpolate $(u,v)$ triangle parametric coordinates
-	const float tu = b0 * uvs[0][0] + b1 * uvs[1][0] + b2 * uvs[2][0];
-	const float tv = b0 * uvs[0][1] + b1 * uvs[1][1] + b2 * uvs[2][1];
+	float tu_ = b0 * uvs[0][0] + b1 * uvs[1][0] + b2 * uvs[2][0];
+	float tv_ = b0 * uvs[0][1] + b1 * uvs[1][1] + b2 * uvs[2][1];
 
 	const Normal nn = Normal(Normalize(Cross(e1, e2)));
 	const Point pp(p1 + b1 * e1 + b2 * e2);
 
+	if (mesh->proj_text){
+		Vector wh = Normalize(pp-mesh->cam);
+		tu_ = SphericalPhi(wh) ;
+		tv_ = SphericalTheta(wh) ;
+	}
+	const float tu = tu_;
+	const float tv = tv_;
+
+	Point wtext = pp;
+	if (mesh->wuv) {
+		wtext = Point (mesh->wuv[v[0]] + b1 * (mesh->wuv[v[1]] - mesh->wuv[v[0]]) + b2 * (mesh->wuv[v[2]] - mesh->wuv[v[0]]));
+	}
 	isect->dg = DifferentialGeometry(pp, nn, dpdu, dpdv,
-		Normal(0, 0, 0), Normal(0, 0, 0), tu, tv, this);
+		Normal(0, 0, 0), Normal(0, 0, 0), tu, tv, this, 0.f, wtext );
 
 	isect->Set(mesh->ObjectToWorld, this, mesh->GetMaterial(),
 		mesh->GetExterior(), mesh->GetInterior());
@@ -162,7 +179,7 @@ bool MeshBaryTriangle::Intersect(const Ray &ray, Intersection* isect) const
 	return true;
 }
 
-bool MeshBaryTriangle::IntersectP(const Ray &ray) const
+bool MeshBaryTriangle::IntersectP(const Ray &ray, bool null_shp_isect) const
 {
 	// Compute $\VEC{s}_1$
 	// Get triangle vertices in _p1_, _p2_, and _p3_
@@ -173,6 +190,10 @@ bool MeshBaryTriangle::IntersectP(const Ray &ray) const
 	Vector e2 = p3 - p1;
 	Vector s1 = Cross(ray.d, e2);
 	const float divisor = Dot(s1, e1);
+
+	//look if shape is a null type
+	if ( null_shp_isect && GetPrimitiveType() == ShapeType(AR_SHAPE) ) return false;
+
 	if (divisor == 0.f)
 		return false;
 	const float invDivisor = 1.f / divisor;
@@ -253,6 +274,10 @@ void MeshBaryTriangle::GetShadingGeometry(const Transform &obj2world,
 {
 	if (!mesh->n) {
 		*dgShading = dg;
+
+		if ( mesh->shape_type == ShapeType(AR_SHAPE) )
+			dgShading->Scale =  ( GetScale(0)+GetScale(1)+GetScale(2) )/3.f ;
+
 		return;
 	}
 
@@ -260,6 +285,11 @@ void MeshBaryTriangle::GetShadingGeometry(const Transform &obj2world,
 	const Normal nsi = dg.iData.baryTriangle.coords[0] * mesh->n[v[0]] +
 		dg.iData.baryTriangle.coords[1] * mesh->n[v[1]] + dg.iData.baryTriangle.coords[2] * mesh->n[v[2]];
 	const Normal ns = Normalize(nsi);
+
+	float lscale = 1.f;
+	if ( mesh->shape_type == ShapeType(AR_SHAPE) )
+		lscale = dg.iData.baryTriangle.coords[0] * mesh->Scale[v[0]] +
+			dg.iData.baryTriangle.coords[1] * mesh->Scale[v[1]] + dg.iData.baryTriangle.coords[2] * mesh->Scale[v[2]];
 
 	Vector ss, ts;
 	Vector tangent, bitangent;
@@ -316,9 +346,11 @@ void MeshBaryTriangle::GetShadingGeometry(const Transform &obj2world,
 	}
 
 	*dgShading = DifferentialGeometry(dg.p, ns, ss, ts,
-		dndu, dndv, tangent, bitangent, btsign, dg.u, dg.v, this);
+		dndu, dndv, tangent, bitangent, btsign, dg.u, dg.v, this, lscale, dg.wuv);
 	dgShading->iData = dg.iData;	
+
 }
+
 
 void MeshBaryTriangle::GetShadingInformation(const DifferentialGeometry &dgShading,
 		RGBColor *color, float *alpha) const {

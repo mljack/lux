@@ -61,9 +61,11 @@ CarPaint::CarPaint(boost::shared_ptr<Texture<SWCSpectrum> > &kd,
 BSDF *CarPaint::GetBSDF(MemoryArena &arena, const SpectrumWavelengths &sw,
 	const Intersection &isect, const DifferentialGeometry &dgs) const
 {
+	SWCSpectrum bcolor = Sc->Evaluate(sw, dgs);
+	float bscale = dgs.Scale;
 	// Allocate _BSDF_
 	MultiBSDF<4> *bsdf = ARENA_ALLOC(arena, MultiBSDF<4>)(dgs, isect.dg.nn,
-		isect.exterior, isect.interior);
+		isect.exterior, isect.interior, bcolor, bscale);
 
 	// The Carpaint BRDF is really a Multi-lobe Microfacet model with a Lambertian base
 	// NOTE - lordcrc - changed clamping to 0..1 to avoid >1 reflection
@@ -181,7 +183,6 @@ Material* CarPaint::CreateMaterial(const Transform &xform, const ParamSet &mp)
 	def_m[2] = carpaintdata[0].m3;
 
 	string paintname = mp.FindOneString("name", "");
-
 	boost::shared_ptr<Texture<SWCSpectrum> > Ka(mp.GetSWCSpectrumTexture("Ka", RGBColor(0.f)));
 	boost::shared_ptr<Texture<float> > d(mp.GetFloatTexture("d", 0.f));
 

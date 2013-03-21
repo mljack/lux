@@ -181,12 +181,13 @@ Texture<SWCSpectrum> *ImageSpectrumTexture::CreateSWCSpectrumTexture(const Trans
 
 	float gain = tp.FindOneFloat("gain", 1.0f);
 	float gamma = tp.FindOneFloat("gamma", 1.0f);
+	bool ar_scale = tp.FindOneBool("ARScale", false);
 
 	FileData::decode(tp, "filename");
 	string filename = tp.FindOneString("filename", "");
 	int discardmm = tp.FindOneInt("discardmipmaps", 0);
 
-	TexInfo texInfo(filterType, filename, discardmm, maxAniso, wrapMode, gain, gamma);
+	TexInfo texInfo(filterType, filename, discardmm, maxAniso, wrapMode, gain, gamma, ar_scale);
 	ImageSpectrumTexture *tex = new ImageSpectrumTexture(texInfo, TextureMapping2D::Create(tex2world, tp));
 
 	return tex;
